@@ -13,6 +13,7 @@ const Set<String> _supportedTcgStorageKeys = <String>{
   'riftbound',
   'lorcana',
 };
+const String _appBuildTag = 'build 8286103';
 
 String _normalizeTcgKey(String? raw, {String fallback = 'yugioh'}) {
   final String normalized = (raw ?? '').trim().toLowerCase();
@@ -202,6 +203,13 @@ class GameRecord {
     this.deckName = '',
     this.playerOneName = 'Player 1',
     this.playerTwoName = 'Player 2',
+    this.playerCount = 2,
+    this.matchId = '',
+    this.matchName = '',
+    this.matchFormat = '',
+    this.opponentDeckId = '',
+    this.opponentDeckName = '',
+    this.matchTag = '',
   });
 
   final String id;
@@ -217,6 +225,13 @@ class GameRecord {
   final String deckName;
   final String playerOneName;
   final String playerTwoName;
+  final int playerCount;
+  final String matchId;
+  final String matchName;
+  final String matchFormat;
+  final String opponentDeckId;
+  final String opponentDeckName;
+  final String matchTag;
 
   GameRecord copyWith({
     String? id,
@@ -232,6 +247,13 @@ class GameRecord {
     String? deckName,
     String? playerOneName,
     String? playerTwoName,
+    int? playerCount,
+    String? matchId,
+    String? matchName,
+    String? matchFormat,
+    String? opponentDeckId,
+    String? opponentDeckName,
+    String? matchTag,
   }) {
     return GameRecord(
       id: id ?? this.id,
@@ -247,6 +269,13 @@ class GameRecord {
       deckName: deckName ?? this.deckName,
       playerOneName: playerOneName ?? this.playerOneName,
       playerTwoName: playerTwoName ?? this.playerTwoName,
+      playerCount: playerCount ?? this.playerCount,
+      matchId: matchId ?? this.matchId,
+      matchName: matchName ?? this.matchName,
+      matchFormat: matchFormat ?? this.matchFormat,
+      opponentDeckId: opponentDeckId ?? this.opponentDeckId,
+      opponentDeckName: opponentDeckName ?? this.opponentDeckName,
+      matchTag: matchTag ?? this.matchTag,
     );
   }
 
@@ -265,6 +294,13 @@ class GameRecord {
       'deckName': deckName,
       'playerOneName': playerOneName,
       'playerTwoName': playerTwoName,
+      'playerCount': playerCount,
+      'matchId': matchId,
+      'matchName': matchName,
+      'matchFormat': matchFormat,
+      'opponentDeckId': opponentDeckId,
+      'opponentDeckName': opponentDeckName,
+      'matchTag': matchTag,
     };
   }
 
@@ -294,6 +330,14 @@ class GameRecord {
         .trim();
     final String playerTwoName = ((json['playerTwoName'] as String?) ?? '')
         .trim();
+    final String matchId = ((json['matchId'] as String?) ?? '').trim();
+    final String matchName = ((json['matchName'] as String?) ?? '').trim();
+    final String matchFormat = ((json['matchFormat'] as String?) ?? '').trim();
+    final String opponentDeckId = ((json['opponentDeckId'] as String?) ?? '')
+        .trim();
+    final String opponentDeckName =
+        ((json['opponentDeckName'] as String?) ?? '').trim();
+    final String matchTag = ((json['matchTag'] as String?) ?? '').trim();
     final bool hasRawTcgKey =
         json['tcgKey'] is String &&
         (json['tcgKey'] as String).trim().isNotEmpty;
@@ -312,6 +356,37 @@ class GameRecord {
               .where((String entry) => entry.trim().isNotEmpty)
               .toList(growable: false)
         : const <String>[];
+    int parsedPlayerCount = 2;
+    final Object? rawPlayerCount = json['playerCount'];
+    if (rawPlayerCount is int) {
+      parsedPlayerCount = rawPlayerCount;
+    } else if (rawPlayerCount is String) {
+      parsedPlayerCount = int.tryParse(rawPlayerCount.trim()) ?? 2;
+    } else if (tcgKey == SupportedTcg.yugioh.storageKey) {
+      parsedPlayerCount = 2;
+    } else if (lifePointHistory.isNotEmpty) {
+      if (lifePointHistory.first.contains('|')) {
+        parsedPlayerCount = 2;
+      } else {
+        final RegExp playerPattern = RegExp(
+          r'Player\s+(\d+)',
+          caseSensitive: false,
+        );
+        int maxPlayerIndex = 0;
+        for (final String line in lifePointHistory) {
+          for (final RegExpMatch match in playerPattern.allMatches(line)) {
+            final int? parsed = int.tryParse(match.group(1) ?? '');
+            if (parsed != null && parsed > maxPlayerIndex) {
+              maxPlayerIndex = parsed;
+            }
+          }
+        }
+        if (maxPlayerIndex >= 2) {
+          parsedPlayerCount = maxPlayerIndex;
+        }
+      }
+    }
+    final int playerCount = parsedPlayerCount.clamp(2, 6).toInt();
     final String? rawDate = json['createdAt'] as String?;
     final DateTime createdAt =
         DateTime.tryParse(rawDate ?? '') ?? DateTime.now();
@@ -330,8 +405,48 @@ class GameRecord {
       deckName: deckName,
       playerOneName: playerOneName.isEmpty ? 'Player 1' : playerOneName,
       playerTwoName: playerTwoName.isEmpty ? 'Player 2' : playerTwoName,
+      playerCount: playerCount,
+      matchId: matchId,
+      matchName: matchName,
+      matchFormat: matchFormat,
+      opponentDeckId: opponentDeckId,
+      opponentDeckName: opponentDeckName,
+      matchTag: matchTag,
     );
   }
+}
+
+@immutable
+class DuelCompletedGamePayload {
+  const DuelCompletedGamePayload({
+    required this.lifePointHistory,
+    required this.gameStage,
+    required this.opponentName,
+    required this.deckId,
+    required this.deckName,
+    required this.opponentDeckId,
+    required this.opponentDeckName,
+    required this.matchFormat,
+    required this.matchTag,
+    required this.matchId,
+    required this.matchName,
+    required this.matchResult,
+    required this.createdAt,
+  });
+
+  final List<String> lifePointHistory;
+  final String gameStage;
+  final String opponentName;
+  final String deckId;
+  final String deckName;
+  final String opponentDeckId;
+  final String opponentDeckName;
+  final String matchFormat;
+  final String matchTag;
+  final String matchId;
+  final String matchName;
+  final String matchResult;
+  final DateTime createdAt;
 }
 
 @immutable
@@ -342,8 +457,17 @@ class DuelResultPayload {
     required this.opponentName,
     required this.deckId,
     required this.deckName,
+    required this.opponentDeckId,
+    required this.opponentDeckName,
+    required this.matchFormat,
+    required this.matchTag,
     required this.matchResult,
+    required this.playerCount,
     this.shouldSave = true,
+    this.completedGames = const <DuelCompletedGamePayload>[],
+    this.createdDecks = const <SideboardDeck>[],
+    this.matchId = '',
+    this.matchName = '',
   });
 
   final List<String> lifePointHistory;
@@ -351,8 +475,17 @@ class DuelResultPayload {
   final String opponentName;
   final String deckId;
   final String deckName;
+  final String opponentDeckId;
+  final String opponentDeckName;
+  final String matchFormat;
+  final String matchTag;
   final String matchResult;
+  final int playerCount;
   final bool shouldSave;
+  final List<DuelCompletedGamePayload> completedGames;
+  final List<SideboardDeck> createdDecks;
+  final String matchId;
+  final String matchName;
 }
 
 @immutable
@@ -641,6 +774,7 @@ class SideboardDeck {
     required this.isFavorite,
     required this.userNotes,
     required this.matchups,
+    this.format = '',
     this.tag = '',
     this.tcgKey = 'yugioh',
   });
@@ -651,6 +785,7 @@ class SideboardDeck {
   final bool isFavorite;
   final String userNotes;
   final List<SideboardMatchup> matchups;
+  final String format;
   final String tag;
   final String tcgKey;
 
@@ -661,6 +796,7 @@ class SideboardDeck {
     bool? isFavorite,
     String? userNotes,
     List<SideboardMatchup>? matchups,
+    String? format,
     String? tag,
     String? tcgKey,
   }) {
@@ -671,6 +807,7 @@ class SideboardDeck {
       isFavorite: isFavorite ?? this.isFavorite,
       userNotes: userNotes ?? this.userNotes,
       matchups: matchups ?? this.matchups,
+      format: format ?? this.format,
       tag: tag ?? this.tag,
       tcgKey: tcgKey ?? this.tcgKey,
     );
@@ -687,6 +824,7 @@ class SideboardDeck {
           .map((SideboardMatchup matchup) => matchup.toJson())
           .toList(growable: false),
       'tag': tag,
+      'format': format,
       'tcgKey': tcgKey,
     };
   }
@@ -704,6 +842,7 @@ class SideboardDeck {
     final bool isFavorite = json['isFavorite'] == true;
     final String userNotes = (json['userNotes'] as String?) ?? '';
     final String tag = ((json['tag'] as String?) ?? '').trim();
+    final String format = ((json['format'] as String?) ?? '').trim();
     final String tcgKey = _normalizeTcgKey(json['tcgKey'] as String?);
     final Object? rawMatchups = json['matchups'];
     final List<SideboardMatchup> parsedMatchups = rawMatchups is List
@@ -723,6 +862,7 @@ class SideboardDeck {
       isFavorite: isFavorite,
       userNotes: userNotes,
       matchups: parsedMatchups,
+      format: format.isNotEmpty ? format : tag,
       tag: tag,
       tcgKey: tcgKey,
     );
@@ -809,6 +949,141 @@ String _formatDateTime(DateTime date) {
   return '${twoDigits(local.day)}/${twoDigits(local.month)}/${local.year} ${twoDigits(local.hour)}:${twoDigits(local.minute)}';
 }
 
+int _gameStageSortKey(String rawStage) {
+  final String normalized = rawStage.trim().toUpperCase();
+  if (normalized.startsWith('G')) {
+    final int? parsed = int.tryParse(normalized.substring(1));
+    if (parsed != null) {
+      return parsed;
+    }
+  }
+  return 999;
+}
+
+enum MatchAggregateResult { pending, win, loss, draw }
+
+enum MatchHistorySortMode { date, name, tag }
+
+String _normalizedMatchResultOrEmpty(String raw) {
+  final String trimmed = raw.trim();
+  return _supportedMatchResults.contains(trimmed) ? trimmed : '';
+}
+
+MatchAggregateResult _aggregateMatchResultFromGames(List<GameRecord> games) {
+  int wins = 0;
+  int losses = 0;
+  int draws = 0;
+
+  for (final GameRecord game in games) {
+    switch (_normalizedMatchResultOrEmpty(game.matchResult)) {
+      case 'Win':
+        wins += 1;
+        if (wins >= 2) {
+          return MatchAggregateResult.win;
+        }
+        break;
+      case 'Loss':
+        losses += 1;
+        if (losses >= 2) {
+          return MatchAggregateResult.loss;
+        }
+        break;
+      case 'Draw':
+        draws += 1;
+        break;
+      default:
+        break;
+    }
+  }
+
+  if (wins == 0 && losses == 0 && draws > 0) {
+    return MatchAggregateResult.draw;
+  }
+  if (draws > 0 && wins == losses && (wins + losses) > 0) {
+    return MatchAggregateResult.draw;
+  }
+  return MatchAggregateResult.pending;
+}
+
+String _matchAggregateResultLabel(MatchAggregateResult result) {
+  switch (result) {
+    case MatchAggregateResult.win:
+      return 'Win';
+    case MatchAggregateResult.loss:
+      return 'Loss';
+    case MatchAggregateResult.draw:
+      return 'Draw';
+    case MatchAggregateResult.pending:
+      return 'Pending';
+  }
+}
+
+@immutable
+class MatchMetadata {
+  const MatchMetadata({
+    required this.name,
+    required this.opponentName,
+    required this.deckId,
+    required this.deckName,
+    required this.opponentDeckId,
+    required this.opponentDeckName,
+    required this.format,
+    required this.tag,
+  });
+
+  final String name;
+  final String opponentName;
+  final String deckId;
+  final String deckName;
+  final String opponentDeckId;
+  final String opponentDeckName;
+  final String format;
+  final String tag;
+
+  MatchMetadata copyWith({
+    String? name,
+    String? opponentName,
+    String? deckId,
+    String? deckName,
+    String? opponentDeckId,
+    String? opponentDeckName,
+    String? format,
+    String? tag,
+  }) {
+    return MatchMetadata(
+      name: name ?? this.name,
+      opponentName: opponentName ?? this.opponentName,
+      deckId: deckId ?? this.deckId,
+      deckName: deckName ?? this.deckName,
+      opponentDeckId: opponentDeckId ?? this.opponentDeckId,
+      opponentDeckName: opponentDeckName ?? this.opponentDeckName,
+      format: format ?? this.format,
+      tag: tag ?? this.tag,
+    );
+  }
+}
+
+@immutable
+class MatchRecord {
+  const MatchRecord({
+    required this.id,
+    required this.tcgKey,
+    required this.metadata,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.games,
+    required this.aggregateResult,
+  });
+
+  final String id;
+  final String tcgKey;
+  final MatchMetadata metadata;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final List<GameRecord> games;
+  final MatchAggregateResult aggregateResult;
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -830,6 +1105,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<SideboardDeck> _sideboardDecks = <SideboardDeck>[];
   Map<String, String> _lastDeckByTcg = <String, String>{};
   SupportedTcg _selectedGame = SupportedTcg.yugioh;
+  String _saveDebugStatus = 'idle';
 
   String get _selectedTcgKey => _selectedGame.storageKey;
   bool get _isImplementedGame =>
@@ -868,6 +1144,28 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final SideboardDeck? linked = _findDeckByNameForSelectedGame(stored);
     return linked?.name ?? '';
+  }
+
+  int _nextTwoPlayerMatchNumberForTcg(String tcgKey) {
+    final Set<String> uniqueMatchIds = <String>{};
+    for (final GameRecord record in _gameRecords) {
+      if (record.tcgKey != tcgKey || record.playerCount != 2) {
+        continue;
+      }
+      final String matchId = record.matchId.trim().isNotEmpty
+          ? record.matchId.trim()
+          : 'legacy-${record.id}';
+      uniqueMatchIds.add(matchId);
+    }
+    return uniqueMatchIds.length + 1;
+  }
+
+  String _defaultMatchNameFor({
+    required SupportedTcg tcg,
+    required int number,
+  }) {
+    final String prefix = tcg == SupportedTcg.mtg ? 'MTG Match' : 'Match';
+    return '$prefix $number';
   }
 
   Map<String, String> _decodeLastDeckByTcg(String? raw) {
@@ -926,6 +1224,43 @@ class _HomeScreenState extends State<HomeScreen> {
         .map((SideboardDeck deck) => deck.copyWith(tcgKey: tcgKey))
         .toList(growable: false);
     return <SideboardDeck>[...untouched, ...updatedScoped];
+  }
+
+  List<SideboardDeck> _mergeDeckCollections({
+    required List<SideboardDeck> existing,
+    required List<SideboardDeck> incoming,
+    required String tcgKey,
+  }) {
+    final List<SideboardDeck> merged = existing
+        .map((SideboardDeck deck) => deck.copyWith(tcgKey: tcgKey))
+        .toList(growable: true);
+    final Set<String> ids = merged
+        .map((SideboardDeck deck) => deck.id.trim())
+        .where((String id) => id.isNotEmpty)
+        .toSet();
+    final Set<String> names = merged
+        .map((SideboardDeck deck) => deck.name.trim().toLowerCase())
+        .where((String name) => name.isNotEmpty)
+        .toSet();
+    for (final SideboardDeck deck in incoming) {
+      final SideboardDeck normalized = deck.copyWith(tcgKey: tcgKey);
+      final String id = normalized.id.trim();
+      final String name = normalized.name.trim().toLowerCase();
+      if (id.isNotEmpty && ids.contains(id)) {
+        continue;
+      }
+      if (name.isNotEmpty && names.contains(name)) {
+        continue;
+      }
+      if (id.isNotEmpty) {
+        ids.add(id);
+      }
+      if (name.isNotEmpty) {
+        names.add(name);
+      }
+      merged.add(normalized);
+    }
+    return merged.toList(growable: false);
   }
 
   List<SideboardDeck> _migrateDeckTcgUsingLinkedRecords(
@@ -1124,8 +1459,8 @@ class _HomeScreenState extends State<HomeScreen> {
     late final Widget duelScreen;
     String duelTitlePrefix = 'Duel';
     final String selectedTcgKey = _selectedTcgKey;
-    final List<SideboardDeck> availableDecks = _decksForSelectedGame();
-    final List<String> availableDeckNames = availableDecks
+    List<SideboardDeck> availableDecks = _decksForSelectedGame();
+    List<String> availableDeckNames = availableDecks
         .map((SideboardDeck deck) => deck.name)
         .toList(growable: false);
     final String defaultDeckName = _defaultDeckNameForSelectedGame();
@@ -1157,7 +1492,7 @@ class _HomeScreenState extends State<HomeScreen> {
         availableDecks: availableDecks,
         initialDeckName: defaultDeckName,
       );
-      duelTitlePrefix = 'MTG Duel';
+      duelTitlePrefix = 'MTG Game';
     } else {
       return;
     }
@@ -1179,54 +1514,228 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (duelResult == null) {
-      await _persistState();
-      return;
-    }
-    if (!duelResult.shouldSave) {
+      setState(() {
+        _saveDebugStatus = 'duelResult=null -> nothing to save';
+      });
       await _persistState();
       return;
     }
 
-    final String rawDeckName = latestDeckName;
-    final String payloadDeckId = duelResult.deckId.trim();
-    SideboardDeck? selectedDeck;
-    if (payloadDeckId.isNotEmpty) {
-      for (final SideboardDeck deck in availableDecks) {
-        if (deck.id == payloadDeckId) {
-          selectedDeck = deck;
-          break;
+    final List<SideboardDeck> newlyCreatedDecks = duelResult.createdDecks
+        .where(
+          (SideboardDeck deck) =>
+              deck.name.trim().isNotEmpty && deck.tcgKey == selectedTcgKey,
+        )
+        .toList(growable: false);
+    if (newlyCreatedDecks.isNotEmpty) {
+      availableDecks = _mergeDeckCollections(
+        existing: availableDecks,
+        incoming: newlyCreatedDecks,
+        tcgKey: selectedTcgKey,
+      );
+      availableDeckNames = availableDecks
+          .map((SideboardDeck deck) => deck.name)
+          .toList(growable: false);
+      setState(() {
+        _sideboardDecks = _mergeDecksForGame(availableDecks, selectedTcgKey);
+      });
+    }
+
+    if (!duelResult.shouldSave) {
+      setState(() {
+        _saveDebugStatus = 'shouldSave=false -> skipped';
+      });
+      await _persistState();
+      return;
+    }
+
+    final List<DuelCompletedGamePayload> payloadGames =
+        duelResult.completedGames.isNotEmpty
+        ? List<DuelCompletedGamePayload>.from(duelResult.completedGames)
+        : <DuelCompletedGamePayload>[
+            DuelCompletedGamePayload(
+              lifePointHistory: List<String>.from(duelResult.lifePointHistory),
+              gameStage: duelResult.gameStage,
+              opponentName: duelResult.opponentName,
+              deckId: duelResult.deckId,
+              deckName: duelResult.deckName,
+              opponentDeckId: duelResult.opponentDeckId,
+              opponentDeckName: duelResult.opponentDeckName,
+              matchFormat: duelResult.matchFormat,
+              matchTag: duelResult.matchTag,
+              matchId: duelResult.matchId,
+              matchName: duelResult.matchName,
+              matchResult: duelResult.matchResult,
+              createdAt: DateTime.now(),
+            ),
+          ];
+
+    final List<GameRecord> newRecords = <GameRecord>[];
+    final int normalizedPlayerCount = duelResult.playerCount
+        .clamp(2, 6)
+        .toInt();
+    final bool isTwoPlayerSession = normalizedPlayerCount == 2;
+    String sessionMatchId = isTwoPlayerSession ? duelResult.matchId.trim() : '';
+    if (isTwoPlayerSession && sessionMatchId.isEmpty) {
+      sessionMatchId = 'match-${DateTime.now().microsecondsSinceEpoch}';
+    }
+    String sessionMatchName = isTwoPlayerSession
+        ? duelResult.matchName.trim()
+        : '';
+    if (isTwoPlayerSession && sessionMatchName.isEmpty) {
+      sessionMatchName = _defaultMatchNameFor(
+        tcg: _selectedGame,
+        number: _nextTwoPlayerMatchNumberForTcg(selectedTcgKey),
+      );
+    }
+    int nextGeneratedMatchNumber = _nextTwoPlayerMatchNumberForTcg(
+      selectedTcgKey,
+    );
+    final Map<String, String> generatedMatchNames = <String, String>{};
+    for (int index = 0; index < payloadGames.length; index += 1) {
+      final DuelCompletedGamePayload payload = payloadGames[index];
+      final List<String> normalizedHistory = payload.lifePointHistory
+          .map((String line) => line.trim())
+          .where((String line) => line.isNotEmpty)
+          .toList(growable: false);
+      final String rawResult = payload.matchResult.trim();
+      final String normalizedResult = _supportedMatchResults.contains(rawResult)
+          ? rawResult
+          : '';
+      final String rawStage = payload.gameStage.trim().toUpperCase();
+      final String normalizedStage = _supportedGameStages.contains(rawStage)
+          ? rawStage
+          : 'G1';
+      if (normalizedHistory.isEmpty && normalizedResult.isEmpty) {
+        continue;
+      }
+
+      final String rawDeckName = payload.deckName.trim();
+      final String payloadDeckId = payload.deckId.trim();
+      SideboardDeck? selectedDeck;
+      if (payloadDeckId.isNotEmpty) {
+        for (final SideboardDeck deck in availableDecks) {
+          if (deck.id == payloadDeckId) {
+            selectedDeck = deck;
+            break;
+          }
         }
       }
+      selectedDeck ??= _findDeckByNameForSelectedGame(rawDeckName);
+      final String resolvedDeckId = selectedDeck?.id ?? payloadDeckId;
+      final String resolvedDeckName = selectedDeck?.name ?? rawDeckName;
+      final String rawOpponentDeckName = payload.opponentDeckName.trim();
+      final String payloadOpponentDeckId = payload.opponentDeckId.trim();
+      SideboardDeck? selectedOpponentDeck;
+      if (payloadOpponentDeckId.isNotEmpty) {
+        for (final SideboardDeck deck in availableDecks) {
+          if (deck.id == payloadOpponentDeckId) {
+            selectedOpponentDeck = deck;
+            break;
+          }
+        }
+      }
+      selectedOpponentDeck ??= _findDeckByNameForSelectedGame(
+        rawOpponentDeckName,
+      );
+      final String resolvedOpponentDeckId =
+          selectedOpponentDeck?.id ?? payloadOpponentDeckId;
+      final String resolvedOpponentDeckName =
+          selectedOpponentDeck?.name ?? rawOpponentDeckName;
+      final String resolvedOpponentName = payload.opponentName.trim();
+      final String resolvedMatchFormat = payload.matchFormat.trim().isNotEmpty
+          ? payload.matchFormat.trim()
+          : (selectedDeck?.format.trim() ?? '');
+      final String resolvedMatchTag = payload.matchTag.trim();
+      final DateTime createdAt = payload.createdAt;
+      final int titleIndex = _gameRecords.length + newRecords.length + 1;
+      String resolvedMatchId = '';
+      String resolvedMatchName = '';
+      if (isTwoPlayerSession) {
+        resolvedMatchId = payload.matchId.trim();
+        if (resolvedMatchId.isEmpty) {
+          resolvedMatchId = sessionMatchId;
+        }
+        if (resolvedMatchId.isEmpty) {
+          resolvedMatchId = 'match-${createdAt.microsecondsSinceEpoch}-$index';
+        }
+        resolvedMatchName = payload.matchName.trim();
+        if (resolvedMatchName.isEmpty &&
+            sessionMatchName.isNotEmpty &&
+            (payload.matchId.trim().isEmpty ||
+                payload.matchId.trim() == sessionMatchId)) {
+          resolvedMatchName = sessionMatchName;
+        }
+        if (resolvedMatchName.isEmpty) {
+          resolvedMatchName = generatedMatchNames.putIfAbsent(
+            resolvedMatchId,
+            () {
+              final String generated = _defaultMatchNameFor(
+                tcg: _selectedGame,
+                number: nextGeneratedMatchNumber,
+              );
+              nextGeneratedMatchNumber += 1;
+              return generated;
+            },
+          );
+        }
+      }
+      newRecords.add(
+        GameRecord(
+          id: '${createdAt.microsecondsSinceEpoch}-$index-${payload.hashCode}',
+          title: '$duelTitlePrefix $titleIndex',
+          createdAt: createdAt,
+          gameStage: normalizedStage,
+          notes: '',
+          lifePointHistory: normalizedHistory,
+          tcgKey: selectedTcgKey,
+          deckId: resolvedDeckId,
+          matchResult: normalizedResult,
+          opponentName: resolvedOpponentName,
+          deckName: resolvedDeckName,
+          playerOneName: _settings.playerOneName,
+          playerTwoName: resolvedOpponentName.isEmpty
+              ? _settings.playerTwoName
+              : resolvedOpponentName,
+          playerCount: normalizedPlayerCount,
+          matchId: resolvedMatchId,
+          matchName: resolvedMatchName,
+          matchFormat: resolvedMatchFormat,
+          opponentDeckId: resolvedOpponentDeckId,
+          opponentDeckName: resolvedOpponentDeckName,
+          matchTag: resolvedMatchTag,
+        ),
+      );
     }
-    selectedDeck ??= _findDeckByNameForSelectedGame(rawDeckName);
-    final String resolvedDeckId = selectedDeck?.id ?? payloadDeckId;
-    final String resolvedDeckName = selectedDeck?.name ?? rawDeckName;
-    final String resolvedOpponentName = duelResult.opponentName.trim();
-    final DateTime now = DateTime.now();
-    final GameRecord createdRecord = GameRecord(
-      id: now.microsecondsSinceEpoch.toString(),
-      title: '$duelTitlePrefix ${_gameRecords.length + 1}',
-      createdAt: now,
-      gameStage: duelResult.gameStage.trim().isEmpty
-          ? 'G1'
-          : duelResult.gameStage,
-      notes: '',
-      lifePointHistory: List<String>.from(duelResult.lifePointHistory),
-      tcgKey: selectedTcgKey,
-      deckId: resolvedDeckId,
-      deckName: resolvedDeckName,
-      matchResult: duelResult.matchResult,
-      opponentName: resolvedOpponentName,
-      playerOneName: _settings.playerOneName,
-      playerTwoName: resolvedOpponentName.isEmpty
-          ? _settings.playerTwoName
-          : resolvedOpponentName,
-    );
+
+    if (newRecords.isEmpty) {
+      setState(() {
+        _saveDebugStatus = 'no completed games to save';
+      });
+      await _persistState();
+      return;
+    }
 
     setState(() {
-      _gameRecords = <GameRecord>[createdRecord, ..._gameRecords];
+      _gameRecords = <GameRecord>[...newRecords, ..._gameRecords];
+      _gameRecords.sort((GameRecord a, GameRecord b) {
+        return b.createdAt.compareTo(a.createdAt);
+      });
+      _saveDebugStatus =
+          'saved ${newRecords.length} game(s); count=${_recordsForSelectedGame().length}';
     });
     await _persistState();
+    if (mounted) {
+      final int savedCount = _recordsForSelectedGame().length;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Saved ${newRecords.length} game(s) to Game History ($savedCount)',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _openGameHistory() async {
@@ -1328,6 +1837,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final AppSettings activeSettings = _settings;
+    final int savedMatchesForGame = _recordsForSelectedGame().length;
 
     return Scaffold(
       body: Container(
@@ -1359,7 +1869,19 @@ class _HomeScreenState extends State<HomeScreen> {
                           letterSpacing: 0.8,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$_appBuildTag • $_saveDebugStatus',
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.55),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
@@ -1411,8 +1933,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           icon: Icons.history_rounded,
                           title: 'Game History',
                           subtitle: _premiumUnlocked
-                              ? 'Date, G1/G2/G3, notes'
-                              : 'Premium feature',
+                              ? '$savedMatchesForGame saved matches'
+                              : 'Premium feature • $savedMatchesForGame saved',
                           backgroundColor: activeSettings.buttonColor,
                           onPressed: _openGameHistory,
                           locked: !_premiumUnlocked,
@@ -2370,7 +2892,7 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('MTG Duel Setup'),
+        title: const Text('MTG Game Setup'),
         leading: IconButton(
           onPressed: () => Navigator.of(context).pop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
@@ -2637,14 +3159,21 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
   late final List<String> _playerNames;
 
   String _opponentName = '';
+  String _opponentDeckInUse = '';
+  String _matchFormat = '';
+  String _matchTag = '';
+  String _matchName = '';
   String _selectedGameStage = 'G1';
   String _deckInUse = '';
   int _bo3Wins = 0;
   int _bo3Losses = 0;
   String _lastCompletedOpponentName = '';
-  String _lastRecordedGameStage = '';
-  String _lastRecordedMatchResult = '';
   String _lastRecordedOpponentName = '';
+  final List<DuelCompletedGamePayload> _completedGamesForSession =
+      <DuelCompletedGamePayload>[];
+  final List<SideboardDeck> _createdDecksForSession = <SideboardDeck>[];
+  late List<SideboardDeck> _sessionAvailableDecks;
+  late String _currentMatchId;
 
   bool get _isMultiplayer => widget.playerCount >= 3;
 
@@ -2732,7 +3261,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
         return trimmed;
       }
     }
-    for (final SideboardDeck deck in widget.availableDecks) {
+    for (final SideboardDeck deck in _sessionAvailableDecks) {
       final String trimmed = deck.name.trim();
       if (trimmed.toLowerCase() == normalizedInitial) {
         return trimmed;
@@ -2746,7 +3275,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     if (normalizedDeck.isEmpty) {
       return null;
     }
-    for (final SideboardDeck deck in widget.availableDecks) {
+    for (final SideboardDeck deck in _sessionAvailableDecks) {
       if (deck.name.trim().toLowerCase() == normalizedDeck) {
         return deck;
       }
@@ -2759,12 +3288,29 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     if (normalizedDeck.isEmpty) {
       return '';
     }
-    for (final SideboardDeck deck in widget.availableDecks) {
+    for (final SideboardDeck deck in _sessionAvailableDecks) {
       if (deck.name.trim().toLowerCase() == normalizedDeck) {
         return deck.id;
       }
     }
     return '';
+  }
+
+  String _deckIdByName(String deckName) {
+    final String normalizedDeck = deckName.trim().toLowerCase();
+    if (normalizedDeck.isEmpty) {
+      return '';
+    }
+    for (final SideboardDeck deck in _sessionAvailableDecks) {
+      if (deck.name.trim().toLowerCase() == normalizedDeck) {
+        return deck.id;
+      }
+    }
+    return '';
+  }
+
+  String _selectedOpponentDeckIdForHistory() {
+    return _deckIdByName(_opponentDeckInUse);
   }
 
   String _formatSideboardEntries(List<SideboardCardEntry> entries) {
@@ -2913,30 +3459,96 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       _bo3Wins = 0;
       _bo3Losses = 0;
       _opponentName = '';
+      _opponentDeckInUse = '';
+      _matchFormat = '';
+      _matchTag = '';
+      _matchName = '';
+      _currentMatchId = 'match-${DateTime.now().microsecondsSinceEpoch}';
     }
   }
 
-  List<String> _deckOptionsForDetails() {
-    final List<String> options = <String>[];
-    for (final String raw in widget.availableDeckNames) {
-      final String trimmed = raw.trim();
-      if (trimmed.isEmpty || options.contains(trimmed)) {
-        continue;
+  String _resolvedOpponentForHistory() {
+    final String trimmedOpponent = _opponentName.trim();
+    if (trimmedOpponent.isNotEmpty) {
+      return trimmedOpponent;
+    }
+    final String rememberedOpponent = _lastRecordedOpponentName.trim();
+    if (rememberedOpponent.isNotEmpty) {
+      return rememberedOpponent;
+    }
+    return _lastCompletedOpponentName.trim();
+  }
+
+  bool _hasActiveGameProgress() {
+    for (int index = 0; index < widget.playerCount; index += 1) {
+      if (_lifePoints[index] != widget.initialLifePoints) {
+        return true;
       }
-      options.add(trimmed);
+      if (_pendingDeltas[index] != 0) {
+        return true;
+      }
+      for (final _MtgResourceCounter counter in _MtgResourceCounter.values) {
+        if ((_resourceCounters[index][counter] ?? 0) != 0) {
+          return true;
+        }
+      }
+      for (final _MtgStatusCounter counter in _MtgStatusCounter.values) {
+        if ((_statusCounters[index][counter] ?? 0) != 0) {
+          return true;
+        }
+      }
+      for (
+        int sourceIndex = 0;
+        sourceIndex < widget.playerCount;
+        sourceIndex += 1
+      ) {
+        if (_commanderDamageReceived[index][sourceIndex] != 0) {
+          return true;
+        }
+      }
     }
-    final String current = _deckInUse.trim();
-    if (current.isNotEmpty && !options.contains(current)) {
-      options.add(current);
+    if (widget.playerCount == 2) {
+      return _twoPlayerLifeEvents.isNotEmpty;
     }
-    return options;
+    return _historyEntries.length > widget.playerCount;
+  }
+
+  DuelCompletedGamePayload _buildCompletedGamePayload({
+    required String matchResult,
+  }) {
+    final String rawStage = _selectedGameStage.trim().toUpperCase();
+    final String normalizedStage = _supportedGameStages.contains(rawStage)
+        ? rawStage
+        : 'G1';
+    final String rawResult = matchResult.trim();
+    final String normalizedResult = _supportedMatchResults.contains(rawResult)
+        ? rawResult
+        : '';
+    return DuelCompletedGamePayload(
+      lifePointHistory: _historySnapshotWithPending(),
+      gameStage: normalizedStage,
+      opponentName: _resolvedOpponentForHistory(),
+      deckId: _selectedDeckIdForHistory(),
+      deckName: _deckInUse.trim(),
+      opponentDeckId: _selectedOpponentDeckIdForHistory(),
+      opponentDeckName: _opponentDeckInUse.trim(),
+      matchFormat: _matchFormat.trim(),
+      matchTag: _matchTag.trim(),
+      matchId: widget.playerCount == 2 ? _currentMatchId : '',
+      matchName: _matchName.trim(),
+      matchResult: normalizedResult,
+      createdAt: DateTime.now(),
+    );
   }
 
   @override
   void initState() {
     super.initState();
     unawaited(WakelockPlus.enable());
+    _sessionAvailableDecks = List<SideboardDeck>.from(widget.availableDecks);
     _deckInUse = _resolveInitialDeckName();
+    _matchFormat = _selectedDeckForGuide()?.format.trim() ?? '';
+    _currentMatchId = 'match-${DateTime.now().microsecondsSinceEpoch}';
     _playerNames = List<String>.generate(
       widget.playerCount,
       (int index) => _defaultPlayerName(index),
@@ -3095,39 +3707,42 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       _cancelPendingTimer(index);
     }
     final String explicitMatchResult = matchResult.trim();
-    final bool shouldUseLastRecordedSnapshot =
-        explicitMatchResult.isNotEmpty &&
-        _selectedGameStage == 'G1' &&
-        _lastRecordedGameStage.trim().isNotEmpty &&
-        _lastRecordedMatchResult.trim().isNotEmpty;
-    final String resolvedMatchResult = shouldUseLastRecordedSnapshot
-        ? _lastRecordedMatchResult.trim()
-        : (explicitMatchResult.isNotEmpty
-              ? explicitMatchResult
-              : _lastRecordedMatchResult.trim());
-    final String resolvedGameStage = shouldUseLastRecordedSnapshot
-        ? _lastRecordedGameStage.trim()
-        : (explicitMatchResult.isNotEmpty
-              ? _selectedGameStage
-              : (_lastRecordedGameStage.trim().isNotEmpty
-                    ? _lastRecordedGameStage.trim()
-                    : _selectedGameStage));
-    final String trimmedOpponent = _opponentName.trim();
-    final String rememberedOpponent = _lastRecordedOpponentName.trim();
-    final String opponentForHistory = trimmedOpponent.isNotEmpty
-        ? trimmedOpponent
-        : (rememberedOpponent.isNotEmpty
-              ? rememberedOpponent
-              : _lastCompletedOpponentName.trim());
+    final DuelCompletedGamePayload currentSnapshot = _buildCompletedGamePayload(
+      matchResult: explicitMatchResult,
+    );
+    List<DuelCompletedGamePayload> gamesToSave =
+        const <DuelCompletedGamePayload>[];
+    if (shouldSave) {
+      gamesToSave = List<DuelCompletedGamePayload>.from(
+        _completedGamesForSession,
+      );
+      final bool includeCurrentGame =
+          explicitMatchResult.isNotEmpty || _hasActiveGameProgress();
+      if (includeCurrentGame) {
+        gamesToSave.add(currentSnapshot);
+      }
+    }
+    final DuelCompletedGamePayload payloadSource = gamesToSave.isNotEmpty
+        ? gamesToSave.last
+        : currentSnapshot;
     Navigator.of(context).pop(
       DuelResultPayload(
-        lifePointHistory: _historySnapshotWithPending(),
-        gameStage: resolvedGameStage,
-        opponentName: opponentForHistory,
-        deckId: _selectedDeckIdForHistory(),
-        deckName: _deckInUse,
-        matchResult: resolvedMatchResult,
-        shouldSave: shouldSave,
+        lifePointHistory: List<String>.from(payloadSource.lifePointHistory),
+        gameStage: payloadSource.gameStage,
+        opponentName: payloadSource.opponentName,
+        deckId: payloadSource.deckId,
+        deckName: payloadSource.deckName,
+        opponentDeckId: payloadSource.opponentDeckId,
+        opponentDeckName: payloadSource.opponentDeckName,
+        matchFormat: payloadSource.matchFormat,
+        matchTag: payloadSource.matchTag,
+        matchResult: payloadSource.matchResult,
+        playerCount: widget.playerCount,
+        shouldSave: shouldSave && gamesToSave.isNotEmpty,
+        completedGames: gamesToSave,
+        createdDecks: List<SideboardDeck>.from(_createdDecksForSession),
+        matchId: widget.playerCount == 2 ? _currentMatchId : '',
+        matchName: _matchName.trim(),
       ),
     );
   }
@@ -3657,8 +4272,14 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
   }
 
   Future<void> _openMatchDetailsEditor() async {
+    final TextEditingController matchNameController = TextEditingController(
+      text: _matchName,
+    );
     final TextEditingController opponentController = TextEditingController(
       text: _opponentName,
+    );
+    final TextEditingController tagController = TextEditingController(
+      text: _matchTag,
     );
     final List<TextEditingController> playerNameControllers =
         List<TextEditingController>.generate(
@@ -3666,11 +4287,137 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
           (int index) => TextEditingController(text: _playerName(index)),
         );
     String stage = _selectedGameStage;
-    final List<String> deckOptions = _deckOptionsForDetails();
     String selectedDeck = _deckInUse.trim();
-    if (selectedDeck.isNotEmpty && !deckOptions.contains(selectedDeck)) {
-      selectedDeck = '';
+    String selectedFormat = _matchFormat.trim();
+    String selectedOpponentDeckId = _selectedOpponentDeckIdForHistory();
+
+    Future<String?> promptText({
+      required String title,
+      required String initialValue,
+      required String hintText,
+    }) async {
+      return showDialog<String>(
+        context: context,
+        builder: (BuildContext context) {
+          return _TextPromptDialog(
+            title: title,
+            initialValue: initialValue,
+            hintText: hintText,
+            maxLines: 1,
+          );
+        },
+      );
     }
+
+    SideboardDeck? deckById(String id) {
+      final String trimmedId = id.trim();
+      if (trimmedId.isEmpty) {
+        return null;
+      }
+      for (final SideboardDeck deck in _sessionAvailableDecks) {
+        if (deck.id == trimmedId) {
+          return deck;
+        }
+      }
+      return null;
+    }
+
+    SideboardDeck? deckByName(String name) {
+      final String normalized = name.trim().toLowerCase();
+      if (normalized.isEmpty) {
+        return null;
+      }
+      for (final SideboardDeck deck in _sessionAvailableDecks) {
+        if (deck.name.trim().toLowerCase() == normalized) {
+          return deck;
+        }
+      }
+      return null;
+    }
+
+    List<String> deckOptions() {
+      final Set<String> unique = <String>{};
+      final List<String> options = <String>[];
+      for (final SideboardDeck deck in _sessionAvailableDecks) {
+        final String trimmed = deck.name.trim();
+        final String key = trimmed.toLowerCase();
+        if (trimmed.isEmpty || unique.contains(key)) {
+          continue;
+        }
+        unique.add(key);
+        options.add(trimmed);
+      }
+      for (final String raw in widget.availableDeckNames) {
+        final String trimmed = raw.trim();
+        final String key = trimmed.toLowerCase();
+        if (trimmed.isEmpty || unique.contains(key)) {
+          continue;
+        }
+        unique.add(key);
+        options.add(trimmed);
+      }
+      if (selectedDeck.isNotEmpty &&
+          !unique.contains(selectedDeck.toLowerCase())) {
+        options.add(selectedDeck);
+      }
+      return options;
+    }
+
+    List<String> formatOptions() {
+      final Set<String> unique = <String>{};
+      for (final SideboardDeck deck in _sessionAvailableDecks) {
+        final String format = deck.format.trim();
+        if (format.isEmpty) {
+          continue;
+        }
+        unique.add(format);
+      }
+      if (selectedFormat.isNotEmpty) {
+        unique.add(selectedFormat);
+      }
+      final List<String> options = unique.toList(growable: false);
+      options.sort((String a, String b) {
+        return a.toLowerCase().compareTo(b.toLowerCase());
+      });
+      return options;
+    }
+
+    List<SideboardDeck> opponentDeckOptions() {
+      final String normalizedFormat = selectedFormat.trim().toLowerCase();
+      if (normalizedFormat.isEmpty) {
+        return _sessionAvailableDecks;
+      }
+      return _sessionAvailableDecks
+          .where((SideboardDeck deck) {
+            return deck.format.trim().toLowerCase() == normalizedFormat;
+          })
+          .toList(growable: false);
+    }
+
+    void normalizeSelectedOpponentDeck() {
+      if (selectedOpponentDeckId.isEmpty) {
+        return;
+      }
+      final SideboardDeck? selectedOpponentDeck = deckById(
+        selectedOpponentDeckId,
+      );
+      if (selectedOpponentDeck == null) {
+        selectedOpponentDeckId = '';
+        return;
+      }
+      final String normalizedFormat = selectedFormat.trim().toLowerCase();
+      if (normalizedFormat.isNotEmpty &&
+          selectedOpponentDeck.format.trim().toLowerCase() !=
+              normalizedFormat) {
+        selectedOpponentDeckId = '';
+      }
+    }
+
+    if (selectedOpponentDeckId.isEmpty &&
+        _opponentDeckInUse.trim().isNotEmpty) {
+      selectedOpponentDeckId = deckByName(_opponentDeckInUse)?.id ?? '';
+    }
+    normalizeSelectedOpponentDeck();
 
     final bool? shouldSave = await showDialog<bool>(
       context: context,
@@ -3685,9 +4432,163 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                   children: [
                     if (!_isMultiplayer) ...[
                       TextField(
+                        controller: matchNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Match name',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
                         controller: opponentController,
                         decoration: const InputDecoration(
                           labelText: 'Opponent name',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedFormat,
+                        decoration: const InputDecoration(
+                          labelText: 'Format',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: <DropdownMenuItem<String>>[
+                          const DropdownMenuItem<String>(
+                            value: '',
+                            child: Text('No format'),
+                          ),
+                          ...formatOptions().map((String format) {
+                            return DropdownMenuItem<String>(
+                              value: format,
+                              child: Text(format),
+                            );
+                          }),
+                          const DropdownMenuItem<String>(
+                            value: '__add_format__',
+                            child: Text('Add new format...'),
+                          ),
+                        ],
+                        onChanged: (String? value) async {
+                          if (value == null) {
+                            return;
+                          }
+                          if (value == '__add_format__') {
+                            final String? created = await promptText(
+                              title: 'New format',
+                              initialValue: '',
+                              hintText: 'Modern, Edison, Commander...',
+                            );
+                            if (created == null) {
+                              return;
+                            }
+                            final String trimmed = created.trim();
+                            if (trimmed.isEmpty) {
+                              return;
+                            }
+                            setDialogState(() {
+                              selectedFormat = trimmed;
+                              normalizeSelectedOpponentDeck();
+                            });
+                            return;
+                          }
+                          setDialogState(() {
+                            selectedFormat = value.trim();
+                            normalizeSelectedOpponentDeck();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedOpponentDeckId,
+                        decoration: const InputDecoration(
+                          labelText: 'Opponent deck',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: <DropdownMenuItem<String>>[
+                          const DropdownMenuItem<String>(
+                            value: '',
+                            child: Text('No opponent deck'),
+                          ),
+                          ...opponentDeckOptions().map((SideboardDeck deck) {
+                            return DropdownMenuItem<String>(
+                              value: deck.id,
+                              child: Text(
+                                deck.name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }),
+                          const DropdownMenuItem<String>(
+                            value: '__add_opponent_deck__',
+                            child: Text('Add new deck...'),
+                          ),
+                        ],
+                        onChanged: (String? value) async {
+                          if (value == null) {
+                            return;
+                          }
+                          if (value == '__add_opponent_deck__') {
+                            final String? createdName = await promptText(
+                              title: 'New opponent deck',
+                              initialValue: '',
+                              hintText: 'Deck name',
+                            );
+                            if (createdName == null) {
+                              return;
+                            }
+                            final String trimmedName = createdName.trim();
+                            if (trimmedName.isEmpty) {
+                              return;
+                            }
+                            final SideboardDeck? existing = deckByName(
+                              trimmedName,
+                            );
+                            if (existing != null) {
+                              setDialogState(() {
+                                selectedOpponentDeckId = existing.id;
+                                normalizeSelectedOpponentDeck();
+                              });
+                              return;
+                            }
+                            final SideboardDeck newDeck = SideboardDeck(
+                              id: DateTime.now().microsecondsSinceEpoch
+                                  .toString(),
+                              name: trimmedName,
+                              createdAt: DateTime.now(),
+                              isFavorite: false,
+                              userNotes: '',
+                              matchups: const <SideboardMatchup>[],
+                              format: selectedFormat.trim(),
+                              tag: '',
+                              tcgKey: SupportedTcg.mtg.storageKey,
+                            );
+                            setDialogState(() {
+                              _sessionAvailableDecks = <SideboardDeck>[
+                                newDeck,
+                                ..._sessionAvailableDecks,
+                              ];
+                              _createdDecksForSession.add(newDeck);
+                              selectedOpponentDeckId = newDeck.id;
+                              normalizeSelectedOpponentDeck();
+                            });
+                            return;
+                          }
+                          setDialogState(() {
+                            selectedOpponentDeckId = value.trim();
+                            normalizeSelectedOpponentDeck();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: tagController,
+                        decoration: const InputDecoration(
+                          labelText: 'Tag',
                           border: OutlineInputBorder(),
                           isDense: true,
                         ),
@@ -3731,7 +4632,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                           value: '',
                           child: Text('No deck'),
                         ),
-                        ...deckOptions.map((String deckName) {
+                        ...deckOptions().map((String deckName) {
                           return DropdownMenuItem<String>(
                             value: deckName,
                             child: Text(deckName),
@@ -3744,6 +4645,18 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                         }
                         setDialogState(() {
                           selectedDeck = value;
+                          if (selectedDeck.isEmpty) {
+                            return;
+                          }
+                          final SideboardDeck? linkedDeck = deckByName(
+                            selectedDeck,
+                          );
+                          if (linkedDeck != null &&
+                              selectedFormat.trim().isEmpty &&
+                              linkedDeck.format.trim().isNotEmpty) {
+                            selectedFormat = linkedDeck.format.trim();
+                          }
+                          normalizeSelectedOpponentDeck();
                         });
                       },
                     ),
@@ -3797,7 +4710,9 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     );
 
     if (shouldSave != true) {
+      matchNameController.dispose();
       opponentController.dispose();
+      tagController.dispose();
       for (final TextEditingController controller in playerNameControllers) {
         controller.dispose();
       }
@@ -3805,7 +4720,14 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     }
 
     setState(() {
+      _matchName = matchNameController.text.trim();
       _opponentName = opponentController.text.trim();
+      _matchFormat = selectedFormat.trim();
+      final SideboardDeck? selectedOpponentDeck = deckById(
+        selectedOpponentDeckId,
+      );
+      _opponentDeckInUse = selectedOpponentDeck?.name ?? '';
+      _matchTag = tagController.text.trim();
       if (_opponentName.isNotEmpty) {
         _lastCompletedOpponentName = _opponentName;
         _lastRecordedOpponentName = _opponentName;
@@ -3815,8 +4737,6 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       if (widget.playerCount == 2 && stage == 'G1') {
         _bo3Wins = 0;
         _bo3Losses = 0;
-        _lastRecordedGameStage = '';
-        _lastRecordedMatchResult = '';
       }
       if (_isMultiplayer) {
         for (
@@ -3831,7 +4751,9 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
         }
       }
     });
+    matchNameController.dispose();
     opponentController.dispose();
+    tagController.dispose();
     for (final TextEditingController controller in playerNameControllers) {
       controller.dispose();
     }
@@ -3873,6 +4795,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
 
   Future<void> _confirmReset({bool fromHome = false}) async {
     const Color resetColor = Color(0xFF232323);
+    const Color saveExitColor = Color(0xFF244A67);
     const Color winColor = Color(0xFF163825);
     const Color lossColor = Color(0xFF4A1E1E);
     const Color drawColor = Color(0xFF4D4220);
@@ -3887,6 +4810,14 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (fromHome) ...[
+                FilledButton.tonal(
+                  onPressed: () => Navigator.of(context).pop('save_exit'),
+                  style: FilledButton.styleFrom(backgroundColor: saveExitColor),
+                  child: const Text('Save and exit'),
+                ),
+                const SizedBox(height: 8),
+              ],
               FilledButton.tonal(
                 onPressed: canOpenSideboardGuide
                     ? () => Navigator.of(context).pop('sideboard')
@@ -3900,7 +4831,9 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
               FilledButton.tonal(
                 onPressed: () => Navigator.of(context).pop('reset'),
                 style: FilledButton.styleFrom(backgroundColor: resetColor),
-                child: const Text('Reset without saving'),
+                child: Text(
+                  fromHome ? 'Exit without saving' : 'Reset without saving',
+                ),
               ),
               const SizedBox(height: 8),
               FilledButton(
@@ -3938,8 +4871,12 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       await _openSideboardGuideDialog();
       return;
     }
+    if (action == 'save_exit') {
+      _closeWithHistory();
+      return;
+    }
     if (action == 'Win' || action == 'Loss' || action == 'Draw') {
-      if (fromHome || widget.playerCount != 2) {
+      if (widget.playerCount != 2) {
         _closeWithHistory(matchResult: action);
         return;
       }
@@ -3950,13 +4887,14 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
         _cancelPendingTimer(index);
       }
       setState(() {
+        _completedGamesForSession.add(
+          _buildCompletedGamePayload(matchResult: action),
+        );
         final String completedOpponent = _opponentName.trim();
         if (completedOpponent.isNotEmpty) {
           _lastCompletedOpponentName = completedOpponent;
           _lastRecordedOpponentName = completedOpponent;
         }
-        _lastRecordedGameStage = _selectedGameStage;
-        _lastRecordedMatchResult = action;
         _advanceBo3AfterRestart(declaredResult: action);
         for (int index = 0; index < widget.playerCount; index += 1) {
           _lifePoints[index] = widget.initialLifePoints;
@@ -4006,8 +4944,6 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       _cancelPendingTimer(index);
     }
     setState(() {
-      _lastRecordedGameStage = '';
-      _lastRecordedMatchResult = '';
       _lastRecordedOpponentName = '';
       _advanceBo3AfterRestart();
       for (int index = 0; index < widget.playerCount; index += 1) {
@@ -5668,14 +6604,21 @@ class _DuelScreenState extends State<DuelScreen> {
   late final List<TwoPlayerLifeEvent> _twoPlayerLifeEvents;
 
   String _opponentName = '';
+  String _opponentDeckInUse = '';
+  String _matchFormat = '';
+  String _matchTag = '';
+  String _matchName = '';
   String _selectedGameStage = 'G1';
   String _deckInUse = '';
   int _bo3Wins = 0;
   int _bo3Losses = 0;
   String _lastCompletedOpponentName = '';
-  String _lastRecordedGameStage = '';
-  String _lastRecordedMatchResult = '';
   String _lastRecordedOpponentName = '';
+  final List<DuelCompletedGamePayload> _completedGamesForSession =
+      <DuelCompletedGamePayload>[];
+  final List<SideboardDeck> _createdDecksForSession = <SideboardDeck>[];
+  late List<SideboardDeck> _sessionAvailableDecks;
+  late String _currentMatchId;
 
   bool get _isMtgRules => widget.ruleset == DuelRuleSet.mtg;
 
@@ -5704,7 +6647,7 @@ class _DuelScreenState extends State<DuelScreen> {
         return trimmed;
       }
     }
-    for (final SideboardDeck deck in widget.availableDecks) {
+    for (final SideboardDeck deck in _sessionAvailableDecks) {
       final String trimmed = deck.name.trim();
       if (trimmed.toLowerCase() == normalizedInitial) {
         return trimmed;
@@ -5718,7 +6661,7 @@ class _DuelScreenState extends State<DuelScreen> {
     if (normalizedDeck.isEmpty) {
       return null;
     }
-    for (final SideboardDeck deck in widget.availableDecks) {
+    for (final SideboardDeck deck in _sessionAvailableDecks) {
       if (deck.name.trim().toLowerCase() == normalizedDeck) {
         return deck;
       }
@@ -5731,12 +6674,29 @@ class _DuelScreenState extends State<DuelScreen> {
     if (normalizedDeck.isEmpty) {
       return '';
     }
-    for (final SideboardDeck deck in widget.availableDecks) {
+    for (final SideboardDeck deck in _sessionAvailableDecks) {
       if (deck.name.trim().toLowerCase() == normalizedDeck) {
         return deck.id;
       }
     }
     return '';
+  }
+
+  String _deckIdByName(String deckName) {
+    final String normalizedDeck = deckName.trim().toLowerCase();
+    if (normalizedDeck.isEmpty) {
+      return '';
+    }
+    for (final SideboardDeck deck in _sessionAvailableDecks) {
+      if (deck.name.trim().toLowerCase() == normalizedDeck) {
+        return deck.id;
+      }
+    }
+    return '';
+  }
+
+  String _selectedOpponentDeckIdForHistory() {
+    return _deckIdByName(_opponentDeckInUse);
   }
 
   String _formatSideboardEntries(List<SideboardCardEntry> entries) {
@@ -5875,7 +6835,80 @@ class _DuelScreenState extends State<DuelScreen> {
       _bo3Wins = 0;
       _bo3Losses = 0;
       _opponentName = '';
+      _opponentDeckInUse = '';
+      _matchFormat = '';
+      _matchTag = '';
+      _matchName = '';
+      _currentMatchId = 'match-${DateTime.now().microsecondsSinceEpoch}';
     }
+  }
+
+  String _resolvedOpponentForHistory() {
+    final String trimmedOpponent = _opponentName.trim();
+    if (trimmedOpponent.isNotEmpty) {
+      return trimmedOpponent;
+    }
+    final String rememberedOpponent = _lastRecordedOpponentName.trim();
+    if (rememberedOpponent.isNotEmpty) {
+      return rememberedOpponent;
+    }
+    return _lastCompletedOpponentName.trim();
+  }
+
+  bool _hasActiveGameProgress() {
+    if (_playerOneLp != widget.initialLifePoints ||
+        _playerTwoLp != widget.initialLifePoints) {
+      return true;
+    }
+    if (_playerOnePendingDelta != 0 || _playerTwoPendingDelta != 0) {
+      return true;
+    }
+    if (_twoPlayerLifeEvents.isNotEmpty) {
+      return true;
+    }
+    if (_isMtgRules) {
+      for (final _MtgResourceCounter counter in _MtgResourceCounter.values) {
+        if ((_playerOneResourceCounters[counter] ?? 0) != 0 ||
+            (_playerTwoResourceCounters[counter] ?? 0) != 0) {
+          return true;
+        }
+      }
+      for (final _MtgStatusCounter counter in _MtgStatusCounter.values) {
+        if ((_playerOneStatusCounters[counter] ?? 0) != 0 ||
+            (_playerTwoStatusCounters[counter] ?? 0) != 0) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  DuelCompletedGamePayload _buildCompletedGamePayload({
+    required String matchResult,
+  }) {
+    final String rawStage = _selectedGameStage.trim().toUpperCase();
+    final String normalizedStage = _supportedGameStages.contains(rawStage)
+        ? rawStage
+        : 'G1';
+    final String rawResult = matchResult.trim();
+    final String normalizedResult = _supportedMatchResults.contains(rawResult)
+        ? rawResult
+        : '';
+    return DuelCompletedGamePayload(
+      lifePointHistory: _historySnapshotWithPending(),
+      gameStage: normalizedStage,
+      opponentName: _resolvedOpponentForHistory(),
+      deckId: _selectedDeckIdForHistory(),
+      deckName: _deckInUse.trim(),
+      opponentDeckId: _selectedOpponentDeckIdForHistory(),
+      opponentDeckName: _opponentDeckInUse.trim(),
+      matchFormat: _matchFormat.trim(),
+      matchTag: _matchTag.trim(),
+      matchId: _currentMatchId,
+      matchName: _matchName.trim(),
+      matchResult: normalizedResult,
+      createdAt: DateTime.now(),
+    );
   }
 
   List<String> _deckOptionsForDetails() {
@@ -5898,7 +6931,10 @@ class _DuelScreenState extends State<DuelScreen> {
   void initState() {
     super.initState();
     unawaited(WakelockPlus.enable());
+    _sessionAvailableDecks = List<SideboardDeck>.from(widget.availableDecks);
     _deckInUse = _resolveInitialDeckName();
+    _matchFormat = _selectedDeckForGuide()?.format.trim() ?? '';
+    _currentMatchId = 'match-${DateTime.now().microsecondsSinceEpoch}';
     _playerOneLp = widget.initialLifePoints;
     _playerTwoLp = widget.initialLifePoints;
     _playerOneResourceCounters = {
@@ -6503,39 +7539,42 @@ class _DuelScreenState extends State<DuelScreen> {
     _cancelPendingTimer(1);
     _cancelPendingTimer(2);
     final String explicitMatchResult = matchResult.trim();
-    final bool shouldUseLastRecordedSnapshot =
-        explicitMatchResult.isNotEmpty &&
-        _selectedGameStage == 'G1' &&
-        _lastRecordedGameStage.trim().isNotEmpty &&
-        _lastRecordedMatchResult.trim().isNotEmpty;
-    final String resolvedMatchResult = shouldUseLastRecordedSnapshot
-        ? _lastRecordedMatchResult.trim()
-        : (explicitMatchResult.isNotEmpty
-              ? explicitMatchResult
-              : _lastRecordedMatchResult.trim());
-    final String resolvedGameStage = shouldUseLastRecordedSnapshot
-        ? _lastRecordedGameStage.trim()
-        : (explicitMatchResult.isNotEmpty
-              ? _selectedGameStage
-              : (_lastRecordedGameStage.trim().isNotEmpty
-                    ? _lastRecordedGameStage.trim()
-                    : _selectedGameStage));
-    final String trimmedOpponent = _opponentName.trim();
-    final String rememberedOpponent = _lastRecordedOpponentName.trim();
-    final String opponentForHistory = trimmedOpponent.isNotEmpty
-        ? trimmedOpponent
-        : (rememberedOpponent.isNotEmpty
-              ? rememberedOpponent
-              : _lastCompletedOpponentName.trim());
+    final DuelCompletedGamePayload currentSnapshot = _buildCompletedGamePayload(
+      matchResult: explicitMatchResult,
+    );
+    List<DuelCompletedGamePayload> gamesToSave =
+        const <DuelCompletedGamePayload>[];
+    if (shouldSave) {
+      gamesToSave = List<DuelCompletedGamePayload>.from(
+        _completedGamesForSession,
+      );
+      final bool includeCurrentGame =
+          explicitMatchResult.isNotEmpty || _hasActiveGameProgress();
+      if (includeCurrentGame) {
+        gamesToSave.add(currentSnapshot);
+      }
+    }
+    final DuelCompletedGamePayload payloadSource = gamesToSave.isNotEmpty
+        ? gamesToSave.last
+        : currentSnapshot;
     Navigator.of(context).pop(
       DuelResultPayload(
-        lifePointHistory: _historySnapshotWithPending(),
-        gameStage: resolvedGameStage,
-        opponentName: opponentForHistory,
-        deckId: _selectedDeckIdForHistory(),
-        deckName: _deckInUse,
-        matchResult: resolvedMatchResult,
-        shouldSave: shouldSave,
+        lifePointHistory: List<String>.from(payloadSource.lifePointHistory),
+        gameStage: payloadSource.gameStage,
+        opponentName: payloadSource.opponentName,
+        deckId: payloadSource.deckId,
+        deckName: payloadSource.deckName,
+        opponentDeckId: payloadSource.opponentDeckId,
+        opponentDeckName: payloadSource.opponentDeckName,
+        matchFormat: payloadSource.matchFormat,
+        matchTag: payloadSource.matchTag,
+        matchResult: payloadSource.matchResult,
+        playerCount: 2,
+        shouldSave: shouldSave && gamesToSave.isNotEmpty,
+        completedGames: gamesToSave,
+        createdDecks: List<SideboardDeck>.from(_createdDecksForSession),
+        matchId: _currentMatchId,
+        matchName: _matchName.trim(),
       ),
     );
   }
@@ -6798,8 +7837,14 @@ class _DuelScreenState extends State<DuelScreen> {
   }
 
   Future<void> _openMatchDetailsEditor() async {
+    final TextEditingController matchNameController = TextEditingController(
+      text: _matchName,
+    );
     final TextEditingController opponentController = TextEditingController(
       text: _opponentName,
+    );
+    final TextEditingController tagController = TextEditingController(
+      text: _matchTag,
     );
     String stage = _selectedGameStage;
     final List<String> deckOptions = _deckOptionsForDetails();
@@ -6807,6 +7852,107 @@ class _DuelScreenState extends State<DuelScreen> {
     if (selectedDeck.isNotEmpty && !deckOptions.contains(selectedDeck)) {
       selectedDeck = '';
     }
+    String selectedFormat = _matchFormat.trim();
+    String selectedOpponentDeckId = _selectedOpponentDeckIdForHistory();
+
+    Future<String?> promptText({
+      required String title,
+      required String initialValue,
+      required String hintText,
+    }) async {
+      return showDialog<String>(
+        context: context,
+        builder: (BuildContext context) {
+          return _TextPromptDialog(
+            title: title,
+            initialValue: initialValue,
+            hintText: hintText,
+            maxLines: 1,
+          );
+        },
+      );
+    }
+
+    SideboardDeck? deckById(String id) {
+      final String trimmedId = id.trim();
+      if (trimmedId.isEmpty) {
+        return null;
+      }
+      for (final SideboardDeck deck in _sessionAvailableDecks) {
+        if (deck.id == trimmedId) {
+          return deck;
+        }
+      }
+      return null;
+    }
+
+    SideboardDeck? deckByName(String name) {
+      final String normalized = name.trim().toLowerCase();
+      if (normalized.isEmpty) {
+        return null;
+      }
+      for (final SideboardDeck deck in _sessionAvailableDecks) {
+        if (deck.name.trim().toLowerCase() == normalized) {
+          return deck;
+        }
+      }
+      return null;
+    }
+
+    List<String> formatOptions() {
+      final Set<String> unique = <String>{};
+      for (final SideboardDeck deck in _sessionAvailableDecks) {
+        final String format = deck.format.trim();
+        if (format.isNotEmpty) {
+          unique.add(format);
+        }
+      }
+      if (selectedFormat.trim().isNotEmpty) {
+        unique.add(selectedFormat.trim());
+      }
+      final List<String> sorted = unique.toList(growable: false);
+      sorted.sort((String a, String b) {
+        return a.toLowerCase().compareTo(b.toLowerCase());
+      });
+      return sorted;
+    }
+
+    List<SideboardDeck> opponentDeckOptions() {
+      final String normalizedFormat = selectedFormat.trim().toLowerCase();
+      if (normalizedFormat.isEmpty) {
+        return _sessionAvailableDecks;
+      }
+      return _sessionAvailableDecks
+          .where((SideboardDeck deck) {
+            return deck.format.trim().toLowerCase() == normalizedFormat;
+          })
+          .toList(growable: false);
+    }
+
+    void normalizeSelectedOpponentDeck() {
+      if (selectedOpponentDeckId.isEmpty) {
+        return;
+      }
+      final SideboardDeck? selectedOpponentDeck = deckById(
+        selectedOpponentDeckId,
+      );
+      if (selectedOpponentDeck == null) {
+        selectedOpponentDeckId = '';
+        return;
+      }
+      final String normalizedFormat = selectedFormat.trim().toLowerCase();
+      if (normalizedFormat.isNotEmpty &&
+          selectedOpponentDeck.format.trim().toLowerCase() !=
+              normalizedFormat) {
+        selectedOpponentDeckId = '';
+      }
+    }
+
+    if (selectedOpponentDeckId.isEmpty &&
+        _opponentDeckInUse.trim().isNotEmpty) {
+      selectedOpponentDeckId = deckByName(_opponentDeckInUse)?.id ?? '';
+    }
+    normalizeSelectedOpponentDeck();
 
     final bool? shouldSave = await showDialog<bool>(
       context: context,
@@ -6820,9 +7966,165 @@ class _DuelScreenState extends State<DuelScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
+                      controller: matchNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Match name',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
                       controller: opponentController,
                       decoration: const InputDecoration(
                         labelText: 'Opponent name',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedFormat,
+                      decoration: const InputDecoration(
+                        labelText: 'Format',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: <DropdownMenuItem<String>>[
+                        const DropdownMenuItem<String>(
+                          value: '',
+                          child: Text('No format'),
+                        ),
+                        ...formatOptions().map((String format) {
+                          return DropdownMenuItem<String>(
+                            value: format,
+                            child: Text(format),
+                          );
+                        }),
+                        const DropdownMenuItem<String>(
+                          value: '__add_format__',
+                          child: Text('Add new format...'),
+                        ),
+                      ],
+                      onChanged: (String? value) async {
+                        if (value == null) {
+                          return;
+                        }
+                        if (value == '__add_format__') {
+                          final String? created = await promptText(
+                            title: 'New format',
+                            initialValue: '',
+                            hintText: 'Modern, Edison, Commander...',
+                          );
+                          if (created == null) {
+                            return;
+                          }
+                          final String trimmed = created.trim();
+                          if (trimmed.isEmpty) {
+                            return;
+                          }
+                          setDialogState(() {
+                            selectedFormat = trimmed;
+                            normalizeSelectedOpponentDeck();
+                          });
+                          return;
+                        }
+                        setDialogState(() {
+                          selectedFormat = value.trim();
+                          normalizeSelectedOpponentDeck();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedOpponentDeckId,
+                      decoration: const InputDecoration(
+                        labelText: 'Opponent deck',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: <DropdownMenuItem<String>>[
+                        const DropdownMenuItem<String>(
+                          value: '',
+                          child: Text('No opponent deck'),
+                        ),
+                        ...opponentDeckOptions().map((SideboardDeck deck) {
+                          return DropdownMenuItem<String>(
+                            value: deck.id,
+                            child: Text(
+                              deck.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }),
+                        const DropdownMenuItem<String>(
+                          value: '__add_opponent_deck__',
+                          child: Text('Add new deck...'),
+                        ),
+                      ],
+                      onChanged: (String? value) async {
+                        if (value == null) {
+                          return;
+                        }
+                        if (value == '__add_opponent_deck__') {
+                          final String? createdName = await promptText(
+                            title: 'New opponent deck',
+                            initialValue: '',
+                            hintText: 'Deck name',
+                          );
+                          if (createdName == null) {
+                            return;
+                          }
+                          final String trimmedName = createdName.trim();
+                          if (trimmedName.isEmpty) {
+                            return;
+                          }
+                          final SideboardDeck? existing = deckByName(
+                            trimmedName,
+                          );
+                          if (existing != null) {
+                            setDialogState(() {
+                              selectedOpponentDeckId = existing.id;
+                              normalizeSelectedOpponentDeck();
+                            });
+                            return;
+                          }
+                          final SideboardDeck newDeck = SideboardDeck(
+                            id: DateTime.now().microsecondsSinceEpoch
+                                .toString(),
+                            name: trimmedName,
+                            createdAt: DateTime.now(),
+                            isFavorite: false,
+                            userNotes: '',
+                            matchups: const <SideboardMatchup>[],
+                            format: selectedFormat.trim(),
+                            tag: '',
+                            tcgKey: _isMtgRules
+                                ? SupportedTcg.mtg.storageKey
+                                : SupportedTcg.yugioh.storageKey,
+                          );
+                          setDialogState(() {
+                            _sessionAvailableDecks = <SideboardDeck>[
+                              newDeck,
+                              ..._sessionAvailableDecks,
+                            ];
+                            _createdDecksForSession.add(newDeck);
+                            selectedOpponentDeckId = newDeck.id;
+                            normalizeSelectedOpponentDeck();
+                          });
+                          return;
+                        }
+                        setDialogState(() {
+                          selectedOpponentDeckId = value.trim();
+                          normalizeSelectedOpponentDeck();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: tagController,
+                      decoration: const InputDecoration(
+                        labelText: 'Tag',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
@@ -6878,6 +8180,18 @@ class _DuelScreenState extends State<DuelScreen> {
                         }
                         setDialogState(() {
                           selectedDeck = value;
+                          if (selectedDeck.isEmpty) {
+                            return;
+                          }
+                          final SideboardDeck? linkedDeck = deckByName(
+                            selectedDeck,
+                          );
+                          if (linkedDeck != null &&
+                              selectedFormat.trim().isEmpty &&
+                              linkedDeck.format.trim().isNotEmpty) {
+                            selectedFormat = linkedDeck.format.trim();
+                          }
+                          normalizeSelectedOpponentDeck();
                         });
                       },
                     ),
@@ -6901,12 +8215,21 @@ class _DuelScreenState extends State<DuelScreen> {
     );
 
     if (shouldSave != true) {
+      matchNameController.dispose();
       opponentController.dispose();
+      tagController.dispose();
       return;
     }
 
     setState(() {
+      _matchName = matchNameController.text.trim();
       _opponentName = opponentController.text.trim();
+      final SideboardDeck? selectedOpponentDeck = deckById(
+        selectedOpponentDeckId,
+      );
+      _opponentDeckInUse = selectedOpponentDeck?.name ?? '';
+      _matchFormat = selectedFormat.trim();
+      _matchTag = tagController.text.trim();
       if (_opponentName.isNotEmpty) {
         _lastCompletedOpponentName = _opponentName;
         _lastRecordedOpponentName = _opponentName;
@@ -6916,15 +8239,16 @@ class _DuelScreenState extends State<DuelScreen> {
       if (stage == 'G1') {
         _bo3Wins = 0;
         _bo3Losses = 0;
-        _lastRecordedGameStage = '';
-        _lastRecordedMatchResult = '';
       }
     });
+    matchNameController.dispose();
     opponentController.dispose();
+    tagController.dispose();
   }
 
   Future<void> _confirmReset({bool fromHome = false}) async {
     const Color resetColor = Color(0xFF232323);
+    const Color saveExitColor = Color(0xFF244A67);
     const Color winColor = Color(0xFF163825);
     const Color lossColor = Color(0xFF4A1E1E);
     const Color drawColor = Color(0xFF4D4220);
@@ -6939,6 +8263,14 @@ class _DuelScreenState extends State<DuelScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (fromHome) ...[
+                FilledButton.tonal(
+                  onPressed: () => Navigator.of(context).pop('save_exit'),
+                  style: FilledButton.styleFrom(backgroundColor: saveExitColor),
+                  child: const Text('Save and exit'),
+                ),
+                const SizedBox(height: 8),
+              ],
               FilledButton.tonal(
                 onPressed: canOpenSideboardGuide
                     ? () => Navigator.of(context).pop('sideboard')
@@ -6952,7 +8284,9 @@ class _DuelScreenState extends State<DuelScreen> {
               FilledButton.tonal(
                 onPressed: () => Navigator.of(context).pop('reset'),
                 style: FilledButton.styleFrom(backgroundColor: resetColor),
-                child: const Text('Reset without saving'),
+                child: Text(
+                  fromHome ? 'Exit without saving' : 'Reset without saving',
+                ),
               ),
               const SizedBox(height: 8),
               FilledButton(
@@ -6991,25 +8325,25 @@ class _DuelScreenState extends State<DuelScreen> {
       await _openSideboardGuideDialog();
       return;
     }
+    if (action == 'save_exit') {
+      _closeWithHistory();
+      return;
+    }
     if (action == 'Win' || action == 'Loss' || action == 'Draw') {
-      if (fromHome) {
-        _closeWithHistory(matchResult: action);
-        return;
-      }
-
       _diceRollTimer?.cancel();
       _diceRollTimer = null;
       _cancelPendingTimer(1);
       _cancelPendingTimer(2);
 
       setState(() {
+        _completedGamesForSession.add(
+          _buildCompletedGamePayload(matchResult: action),
+        );
         final String completedOpponent = _opponentName.trim();
         if (completedOpponent.isNotEmpty) {
           _lastCompletedOpponentName = completedOpponent;
           _lastRecordedOpponentName = completedOpponent;
         }
-        _lastRecordedGameStage = _selectedGameStage;
-        _lastRecordedMatchResult = action;
         _advanceBo3AfterRestart(declaredResult: action);
         _playerOneLp = widget.initialLifePoints;
         _playerTwoLp = widget.initialLifePoints;
@@ -7045,8 +8379,6 @@ class _DuelScreenState extends State<DuelScreen> {
     _cancelPendingTimer(2);
 
     setState(() {
-      _lastRecordedGameStage = '';
-      _lastRecordedMatchResult = '';
       _lastRecordedOpponentName = '';
       _advanceBo3AfterRestart();
       _playerOneLp = widget.initialLifePoints;
@@ -7956,6 +9288,8 @@ class GameHistoryScreen extends StatefulWidget {
 
 class _GameHistoryScreenState extends State<GameHistoryScreen> {
   late List<GameRecord> _records;
+  MatchHistorySortMode _matchHistorySortMode = MatchHistorySortMode.date;
+  String _selectedMatchTagFilter = '';
 
   @override
   void initState() {
@@ -7968,6 +9302,239 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
 
   void _closeWithResult() {
     Navigator.of(context).pop(_records);
+  }
+
+  bool get _isTwoPlayerHistoryOnly {
+    return _records.isNotEmpty &&
+        _records.every((GameRecord record) => record.playerCount == 2);
+  }
+
+  String _defaultMatchName(int number) {
+    final String prefix = widget.tcg == SupportedTcg.mtg
+        ? 'MTG Match'
+        : 'Match';
+    return '$prefix $number';
+  }
+
+  String _effectiveMatchId(GameRecord record) {
+    final String rawMatchId = record.matchId.trim();
+    if (rawMatchId.isNotEmpty) {
+      return rawMatchId;
+    }
+    return 'legacy-${record.id}';
+  }
+
+  String _firstNonEmptyFromNewest(
+    List<GameRecord> games,
+    String Function(GameRecord game) pick,
+  ) {
+    for (int index = games.length - 1; index >= 0; index -= 1) {
+      final String value = pick(games[index]).trim();
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+    return '';
+  }
+
+  List<MatchRecord> _twoPlayerMatchRecords() {
+    final List<GameRecord> twoPlayerRecords = _records
+        .where((GameRecord record) => record.playerCount == 2)
+        .toList(growable: false);
+    if (twoPlayerRecords.isEmpty) {
+      return const <MatchRecord>[];
+    }
+
+    final Map<String, List<GameRecord>> grouped = <String, List<GameRecord>>{};
+    for (final GameRecord record in twoPlayerRecords) {
+      final String matchId = _effectiveMatchId(record);
+      grouped.putIfAbsent(matchId, () => <GameRecord>[]).add(record);
+    }
+
+    final List<MapEntry<String, List<GameRecord>>> groupedEntries = grouped
+        .entries
+        .toList(growable: false);
+    groupedEntries.sort((
+      MapEntry<String, List<GameRecord>> a,
+      MapEntry<String, List<GameRecord>> b,
+    ) {
+      final DateTime aCreated = a.value
+          .map((GameRecord record) => record.createdAt)
+          .reduce(
+            (DateTime first, DateTime next) =>
+                first.isBefore(next) ? first : next,
+          );
+      final DateTime bCreated = b.value
+          .map((GameRecord record) => record.createdAt)
+          .reduce(
+            (DateTime first, DateTime next) =>
+                first.isBefore(next) ? first : next,
+          );
+      return aCreated.compareTo(bCreated);
+    });
+
+    final List<MatchRecord> matches = <MatchRecord>[];
+    int fallbackNumber = 0;
+    for (final MapEntry<String, List<GameRecord>> entry in groupedEntries) {
+      final List<GameRecord> games = List<GameRecord>.from(entry.value);
+      games.sort((GameRecord a, GameRecord b) {
+        final int byStage = _gameStageSortKey(
+          a.gameStage,
+        ).compareTo(_gameStageSortKey(b.gameStage));
+        if (byStage != 0) {
+          return byStage;
+        }
+        return a.createdAt.compareTo(b.createdAt);
+      });
+      fallbackNumber += 1;
+
+      String matchName = '';
+      for (final GameRecord game in games) {
+        final String candidate = game.matchName.trim();
+        if (candidate.isNotEmpty) {
+          matchName = candidate;
+          break;
+        }
+      }
+      if (matchName.isEmpty) {
+        matchName = _defaultMatchName(fallbackNumber);
+      }
+
+      final DateTime createdAt = games
+          .map((GameRecord record) => record.createdAt)
+          .reduce(
+            (DateTime first, DateTime next) =>
+                first.isBefore(next) ? first : next,
+          );
+      final DateTime updatedAt = games
+          .map((GameRecord record) => record.createdAt)
+          .reduce(
+            (DateTime first, DateTime next) =>
+                first.isAfter(next) ? first : next,
+          );
+      final String opponent = _firstNonEmptyFromNewest(games, (
+        GameRecord game,
+      ) {
+        final String rawOpponent = game.opponentName.trim();
+        if (rawOpponent.isNotEmpty) {
+          return rawOpponent;
+        }
+        return game.playerTwoName.trim();
+      });
+      final String deckId = _firstNonEmptyFromNewest(
+        games,
+        (GameRecord game) => _resolvedDeckId(game),
+      );
+      final String deckName = _firstNonEmptyFromNewest(
+        games,
+        (GameRecord game) => _resolvedDeckName(game),
+      );
+      final String opponentDeckId = _firstNonEmptyFromNewest(
+        games,
+        (GameRecord game) => _resolvedOpponentDeckId(game),
+      );
+      final String opponentDeckName = _firstNonEmptyFromNewest(
+        games,
+        (GameRecord game) => _resolvedOpponentDeckName(game),
+      );
+      final String matchFormat = _firstNonEmptyFromNewest(
+        games,
+        (GameRecord game) => game.matchFormat.trim(),
+      );
+      final String tag = _firstNonEmptyFromNewest(
+        games,
+        (GameRecord game) => game.matchTag.trim(),
+      );
+      final MatchMetadata metadata = MatchMetadata(
+        name: matchName,
+        opponentName: opponent,
+        deckId: deckId,
+        deckName: deckName,
+        opponentDeckId: opponentDeckId,
+        opponentDeckName: opponentDeckName,
+        format: matchFormat,
+        tag: tag,
+      );
+
+      matches.add(
+        MatchRecord(
+          id: entry.key,
+          tcgKey: widget.tcg.storageKey,
+          metadata: metadata,
+          createdAt: createdAt,
+          updatedAt: updatedAt,
+          games: games,
+          aggregateResult: _aggregateMatchResultFromGames(games),
+        ),
+      );
+    }
+
+    matches.sort((MatchRecord a, MatchRecord b) {
+      return b.createdAt.compareTo(a.createdAt);
+    });
+    return matches;
+  }
+
+  List<MatchRecord> _sortedAndFilteredMatchRecords(List<MatchRecord> matches) {
+    final List<MatchRecord> sorted = List<MatchRecord>.from(matches);
+    switch (_matchHistorySortMode) {
+      case MatchHistorySortMode.date:
+        sorted.sort((MatchRecord a, MatchRecord b) {
+          return b.createdAt.compareTo(a.createdAt);
+        });
+        break;
+      case MatchHistorySortMode.name:
+        sorted.sort((MatchRecord a, MatchRecord b) {
+          return a.metadata.name.toLowerCase().compareTo(
+            b.metadata.name.toLowerCase(),
+          );
+        });
+        break;
+      case MatchHistorySortMode.tag:
+        final String selectedTag = _selectedMatchTagFilter.trim().toLowerCase();
+        final List<MatchRecord> filtered = selectedTag.isEmpty
+            ? sorted
+            : sorted
+                  .where((MatchRecord match) {
+                    return match.metadata.tag.trim().toLowerCase() ==
+                        selectedTag;
+                  })
+                  .toList(growable: false);
+        filtered.sort((MatchRecord a, MatchRecord b) {
+          return b.createdAt.compareTo(a.createdAt);
+        });
+        return filtered;
+    }
+    return sorted;
+  }
+
+  Future<void> _openMatchGroup(MatchRecord match) async {
+    final List<GameRecord>? updatedGames = await Navigator.of(context)
+        .push<List<GameRecord>>(
+          MaterialPageRoute<List<GameRecord>>(
+            builder: (_) => _TwoPlayerMatchDetailScreen(
+              tcg: widget.tcg,
+              decks: widget.decks,
+              match: match,
+            ),
+          ),
+        );
+    if (updatedGames == null) {
+      return;
+    }
+
+    final Set<String> oldIds = match.games
+        .map((GameRecord record) => record.id)
+        .toSet();
+    setState(() {
+      _records = _records
+          .where((GameRecord record) => !oldIds.contains(record.id))
+          .toList(growable: false);
+      _records = <GameRecord>[...updatedGames, ..._records];
+      _records.sort((GameRecord a, GameRecord b) {
+        return b.createdAt.compareTo(a.createdAt);
+      });
+    });
   }
 
   Future<String?> _promptText({
@@ -8013,6 +9580,19 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     return null;
   }
 
+  SideboardDeck? _deckByName(String deckName) {
+    final String normalized = deckName.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    for (final SideboardDeck deck in widget.decks) {
+      if (deck.name.trim().toLowerCase() == normalized) {
+        return deck;
+      }
+    }
+    return null;
+  }
+
   String _resolvedDeckName(GameRecord record) {
     final SideboardDeck? linkedDeck = _deckById(record.deckId);
     if (linkedDeck != null) {
@@ -8026,22 +9606,29 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     if (currentId.isNotEmpty && _deckById(currentId) != null) {
       return currentId;
     }
-    final String normalizedDeckName = record.deckName.trim().toLowerCase();
-    if (normalizedDeckName.isEmpty) {
-      return '';
+    final SideboardDeck? linked = _deckByName(record.deckName);
+    return linked?.id ?? '';
+  }
+
+  String _resolvedOpponentDeckName(GameRecord record) {
+    final SideboardDeck? linkedDeck = _deckById(record.opponentDeckId);
+    if (linkedDeck != null) {
+      return linkedDeck.name;
     }
-    for (final SideboardDeck deck in widget.decks) {
-      if (deck.name.trim().toLowerCase() == normalizedDeckName) {
-        return deck.id;
-      }
+    return record.opponentDeckName.trim();
+  }
+
+  String _resolvedOpponentDeckId(GameRecord record) {
+    final String currentId = record.opponentDeckId.trim();
+    if (currentId.isNotEmpty && _deckById(currentId) != null) {
+      return currentId;
     }
-    return '';
+    final SideboardDeck? linked = _deckByName(record.opponentDeckName);
+    return linked?.id ?? '';
   }
 
   String _selectedMatchResult(GameRecord record) {
-    return _supportedMatchResults.contains(record.matchResult)
-        ? record.matchResult
-        : '';
+    return _normalizedMatchResultOrEmpty(record.matchResult);
   }
 
   Color _matchResultBackgroundColor(String result) {
@@ -8410,9 +9997,9 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
 
   Future<void> _renameRecord(GameRecord record) async {
     final String? result = await _promptText(
-      title: 'Rename duel',
+      title: 'Rename game',
       initialValue: record.title,
-      hintText: 'Duel name',
+      hintText: 'Game name',
     );
     if (result == null) {
       return;
@@ -8443,7 +10030,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Delete duel'),
+          title: const Text('Delete game'),
           content: Text('Delete "${record.title}" from history?'),
           actions: [
             TextButton(
@@ -8469,9 +10056,16 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
 
   void _createManualRecord() {
     final DateTime now = DateTime.now();
+    final Set<String> twoPlayerMatchIds = _records
+        .where((GameRecord record) => record.playerCount == 2)
+        .map((GameRecord record) => _effectiveMatchId(record))
+        .toSet();
+    final String matchId = 'manual-match-${now.microsecondsSinceEpoch}';
+    final String matchName = _defaultMatchName(twoPlayerMatchIds.length + 1);
     final GameRecord newRecord = GameRecord(
       id: now.microsecondsSinceEpoch.toString(),
-      title: 'Duel ${_records.length + 1}',
+      title:
+          '${widget.tcg == SupportedTcg.mtg ? 'MTG Game' : 'Game'} ${_records.length + 1}',
       createdAt: now,
       gameStage: 'G1',
       notes: '',
@@ -8480,6 +10074,12 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       deckId: '',
       playerOneName: 'Player 1',
       playerTwoName: 'Player 2',
+      playerCount: 2,
+      matchId: matchId,
+      matchName: matchName,
+      opponentDeckId: '',
+      opponentDeckName: '',
+      matchTag: '',
     );
 
     setState(() {
@@ -8502,7 +10102,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                     lines: record.lifePointHistory,
                     dividerColor: Colors.white.withValues(alpha: 0.14),
                   )
-                : const Text('No life point history saved for this duel yet.'),
+                : const Text('No life point history saved for this game yet.'),
           ),
           actions: [
             FilledButton(
@@ -8515,8 +10115,263 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     );
   }
 
+  List<String> _availableMatchTags(List<MatchRecord> matches) {
+    final Set<String> unique = <String>{};
+    for (final MatchRecord match in matches) {
+      final String tag = match.metadata.tag.trim();
+      if (tag.isEmpty) {
+        continue;
+      }
+      unique.add(tag);
+    }
+    final List<String> sorted = unique.toList(growable: false);
+    sorted.sort((String a, String b) {
+      return a.toLowerCase().compareTo(b.toLowerCase());
+    });
+    return sorted;
+  }
+
+  Widget _buildAggregateResultBadge(MatchAggregateResult result) {
+    final String label = _matchAggregateResultLabel(result);
+    final Color bg = _matchResultBackgroundColor(label);
+    final Color fg = _matchResultTextColor(label);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
+  Widget _buildTwoPlayerMatchList() {
+    final List<MatchRecord> allMatches = _twoPlayerMatchRecords();
+    final List<String> availableTags = _availableMatchTags(allMatches);
+    if (_selectedMatchTagFilter.isNotEmpty &&
+        !availableTags.contains(_selectedMatchTagFilter)) {
+      _selectedMatchTagFilter = '';
+    }
+    final List<MatchRecord> matches = _sortedAndFilteredMatchRecords(
+      allMatches,
+    );
+    if (matches.isEmpty) {
+      return Center(
+        child: Text(
+          _matchHistorySortMode == MatchHistorySortMode.tag &&
+                  _selectedMatchTagFilter.isNotEmpty
+              ? 'No matches for "$_selectedMatchTagFilter".'
+              : 'No matches tracked yet.\nStart a game or create one manually.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.74)),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+          child: Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<MatchHistorySortMode>(
+                  initialValue: _matchHistorySortMode,
+                  decoration: const InputDecoration(
+                    labelText: 'Sort/filter',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: const <DropdownMenuItem<MatchHistorySortMode>>[
+                    DropdownMenuItem<MatchHistorySortMode>(
+                      value: MatchHistorySortMode.date,
+                      child: Text('By date'),
+                    ),
+                    DropdownMenuItem<MatchHistorySortMode>(
+                      value: MatchHistorySortMode.name,
+                      child: Text('By name'),
+                    ),
+                    DropdownMenuItem<MatchHistorySortMode>(
+                      value: MatchHistorySortMode.tag,
+                      child: Text('By tag'),
+                    ),
+                  ],
+                  onChanged: (MatchHistorySortMode? mode) {
+                    if (mode == null) {
+                      return;
+                    }
+                    setState(() {
+                      _matchHistorySortMode = mode;
+                    });
+                  },
+                ),
+              ),
+              if (_matchHistorySortMode == MatchHistorySortMode.tag) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _selectedMatchTagFilter.isEmpty
+                        ? null
+                        : _selectedMatchTagFilter,
+                    decoration: const InputDecoration(
+                      labelText: 'Tag',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: <DropdownMenuItem<String>>[
+                      const DropdownMenuItem<String>(
+                        value: '',
+                        child: Text('All tags'),
+                      ),
+                      ...availableTags.map((String tag) {
+                        return DropdownMenuItem<String>(
+                          value: tag,
+                          child: Text(tag, overflow: TextOverflow.ellipsis),
+                        );
+                      }),
+                    ],
+                    onChanged: (String? value) {
+                      setState(() {
+                        _selectedMatchTagFilter = (value ?? '').trim();
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            itemCount: matches.length,
+            itemBuilder: (BuildContext context, int index) {
+              final MatchRecord match = matches[index];
+              final String opponentLabel = match.metadata.opponentName.isEmpty
+                  ? '-'
+                  : match.metadata.opponentName;
+              final String deckLabel = match.metadata.deckName.isEmpty
+                  ? '-'
+                  : match.metadata.deckName;
+              final String opponentDeckLabel =
+                  match.metadata.opponentDeckName.isEmpty
+                  ? '-'
+                  : match.metadata.opponentDeckName;
+              final String formatLabel = match.metadata.format.isEmpty
+                  ? '-'
+                  : match.metadata.format;
+              final String tagLabel = match.metadata.tag.isEmpty
+                  ? '-'
+                  : match.metadata.tag;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                color: const Color(0xFF1E1B1B),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _openMatchGroup(match),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                match.metadata.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildAggregateResultBadge(match.aggregateResult),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          _formatDateTime(match.createdAt),
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Opponent: $opponentLabel',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.84),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Deck: $deckLabel',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Opponent Deck: $opponentDeckLabel',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Format: $formatLabel',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tag: $tagLabel',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.78),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${match.games.length} game${match.games.length == 1 ? '' : 's'}',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.72),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool twoPlayerOnly = _isTwoPlayerHistoryOnly;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) {
@@ -8544,7 +10399,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
               icon: const Icon(Icons.download_rounded),
             ),
             IconButton(
-              tooltip: 'Add duel',
+              tooltip: twoPlayerOnly ? 'Add match' : 'Add game',
               onPressed: _createManualRecord,
               icon: const Icon(Icons.add_rounded),
             ),
@@ -8553,11 +10408,13 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
         body: _records.isEmpty
             ? Center(
                 child: Text(
-                  'No duels tracked yet.\nStart a duel or create one manually.',
+                  'No games tracked yet.\nStart a game or create one manually.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white.withValues(alpha: 0.74)),
                 ),
               )
+            : twoPlayerOnly
+            ? _buildTwoPlayerMatchList()
             : ListView.builder(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -8825,7 +10682,936 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   }
 }
 
-enum SideboardDeckSortMode { alphabetical, createdAt, favorites, tag }
+class _TwoPlayerMatchDetailScreen extends StatefulWidget {
+  const _TwoPlayerMatchDetailScreen({
+    required this.tcg,
+    required this.decks,
+    required this.match,
+  });
+
+  final SupportedTcg tcg;
+  final List<SideboardDeck> decks;
+  final MatchRecord match;
+
+  @override
+  State<_TwoPlayerMatchDetailScreen> createState() =>
+      _TwoPlayerMatchDetailScreenState();
+}
+
+class _TwoPlayerMatchDetailScreenState
+    extends State<_TwoPlayerMatchDetailScreen> {
+  late List<GameRecord> _games;
+  late MatchMetadata _metadata;
+
+  @override
+  void initState() {
+    super.initState();
+    final String initialName = widget.match.metadata.name.trim().isEmpty
+        ? _defaultMatchName()
+        : widget.match.metadata.name.trim();
+    _metadata = widget.match.metadata.copyWith(name: initialName);
+    _games = widget.match.games
+        .map((GameRecord game) => _applyMetadataToGame(game))
+        .toList(growable: false);
+    _sortGames();
+  }
+
+  String _defaultMatchName() {
+    return widget.tcg == SupportedTcg.mtg ? 'MTG Match' : 'Match';
+  }
+
+  void _sortGames() {
+    _games.sort((GameRecord a, GameRecord b) {
+      final int byStage = _gameStageSortKey(
+        a.gameStage,
+      ).compareTo(_gameStageSortKey(b.gameStage));
+      if (byStage != 0) {
+        return byStage;
+      }
+      return a.createdAt.compareTo(b.createdAt);
+    });
+  }
+
+  void _closeWithResult() {
+    final List<GameRecord> updated = _games
+        .map((GameRecord game) => _applyMetadataToGame(game))
+        .toList(growable: false);
+    Navigator.of(context).pop(updated);
+  }
+
+  String _effectiveMatchName() {
+    final String name = _metadata.name.trim();
+    return name.isEmpty ? _defaultMatchName() : name;
+  }
+
+  GameRecord _applyMetadataToGame(GameRecord game) {
+    final String opponent = _metadata.opponentName.trim();
+    return game.copyWith(
+      matchId: widget.match.id,
+      matchName: _effectiveMatchName(),
+      opponentName: opponent,
+      playerTwoName: opponent.isEmpty ? 'Player 2' : opponent,
+      deckId: _metadata.deckId.trim(),
+      deckName: _metadata.deckName.trim(),
+      opponentDeckId: _metadata.opponentDeckId.trim(),
+      opponentDeckName: _metadata.opponentDeckName.trim(),
+      matchFormat: _metadata.format.trim(),
+      matchTag: _metadata.tag.trim(),
+    );
+  }
+
+  Future<String?> _promptText({
+    required String title,
+    required String initialValue,
+    required String hintText,
+    int maxLines = 1,
+  }) async {
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return _TextPromptDialog(
+          title: title,
+          initialValue: initialValue,
+          hintText: hintText,
+          maxLines: maxLines,
+        );
+      },
+    );
+  }
+
+  SideboardDeck? _deckById(String deckId) {
+    final String trimmedId = deckId.trim();
+    if (trimmedId.isEmpty) {
+      return null;
+    }
+    for (final SideboardDeck deck in widget.decks) {
+      if (deck.id == trimmedId) {
+        return deck;
+      }
+    }
+    return null;
+  }
+
+  SideboardDeck? _deckByName(String deckName) {
+    final String normalized = deckName.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    for (final SideboardDeck deck in widget.decks) {
+      if (deck.name.trim().toLowerCase() == normalized) {
+        return deck;
+      }
+    }
+    return null;
+  }
+
+  String _selectedMatchResult(GameRecord record) {
+    return _normalizedMatchResultOrEmpty(record.matchResult);
+  }
+
+  Color _matchResultBackgroundColor(String result) {
+    if (result == 'Win') {
+      return const Color(0xFF245D32);
+    }
+    if (result == 'Loss') {
+      return const Color(0xFF6A2323);
+    }
+    if (result == 'Draw') {
+      return const Color(0xFF665825);
+    }
+    return const Color(0xFF2B2424);
+  }
+
+  Color _matchResultTextColor(String result) {
+    if (result == 'Win') {
+      return const Color(0xFFB8FFCC);
+    }
+    if (result == 'Loss') {
+      return const Color(0xFFFFC4C4);
+    }
+    if (result == 'Draw') {
+      return const Color(0xFFFFEEAA);
+    }
+    return Colors.white.withValues(alpha: 0.86);
+  }
+
+  void _updateGame(GameRecord updatedGame) {
+    final int index = _games.indexWhere(
+      (GameRecord game) => game.id == updatedGame.id,
+    );
+    if (index < 0) {
+      return;
+    }
+    setState(() {
+      _games[index] = _applyMetadataToGame(updatedGame);
+      _sortGames();
+    });
+  }
+
+  void _applyMatchMetadata(MatchMetadata metadata) {
+    final String normalizedName = metadata.name.trim().isEmpty
+        ? _defaultMatchName()
+        : metadata.name.trim();
+    final MatchMetadata normalized = metadata.copyWith(name: normalizedName);
+    setState(() {
+      _metadata = normalized;
+      _games = _games
+          .map((GameRecord game) => _applyMetadataToGame(game))
+          .toList(growable: false);
+      _sortGames();
+    });
+  }
+
+  Future<void> _renameMatch() async {
+    final String? result = await _promptText(
+      title: 'Rename match',
+      initialValue: _effectiveMatchName(),
+      hintText: 'Match name',
+    );
+    if (result == null) {
+      return;
+    }
+    final String trimmed = result.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    _applyMatchMetadata(_metadata.copyWith(name: trimmed));
+  }
+
+  Future<void> _editMatchMetadata() async {
+    final TextEditingController matchNameController = TextEditingController(
+      text: _effectiveMatchName(),
+    );
+    final TextEditingController opponentController = TextEditingController(
+      text: _metadata.opponentName,
+    );
+    final TextEditingController tagController = TextEditingController(
+      text: _metadata.tag,
+    );
+    String selectedDeckId = _metadata.deckId.trim();
+    if (selectedDeckId.isEmpty && _metadata.deckName.trim().isNotEmpty) {
+      selectedDeckId = _deckByName(_metadata.deckName)?.id ?? '';
+    }
+    if (selectedDeckId.isNotEmpty && _deckById(selectedDeckId) == null) {
+      selectedDeckId = '';
+    }
+    String selectedFormat = _metadata.format.trim();
+    String selectedOpponentDeckId = _metadata.opponentDeckId.trim();
+    if (selectedOpponentDeckId.isEmpty &&
+        _metadata.opponentDeckName.trim().isNotEmpty) {
+      selectedOpponentDeckId =
+          _deckByName(_metadata.opponentDeckName)?.id ?? '';
+    }
+
+    List<String> formatOptions() {
+      final Set<String> formats = <String>{};
+      for (final SideboardDeck deck in widget.decks) {
+        final String format = deck.format.trim();
+        if (format.isNotEmpty) {
+          formats.add(format);
+        }
+      }
+      for (final GameRecord game in _games) {
+        final String format = game.matchFormat.trim();
+        if (format.isNotEmpty) {
+          formats.add(format);
+        }
+      }
+      if (selectedFormat.trim().isNotEmpty) {
+        formats.add(selectedFormat.trim());
+      }
+      final List<String> sorted = formats.toList(growable: false);
+      sorted.sort((String a, String b) {
+        return a.toLowerCase().compareTo(b.toLowerCase());
+      });
+      return sorted;
+    }
+
+    List<SideboardDeck> opponentDeckOptions() {
+      final String normalizedFormat = selectedFormat.trim().toLowerCase();
+      if (normalizedFormat.isEmpty) {
+        return widget.decks;
+      }
+      return widget.decks
+          .where((SideboardDeck deck) {
+            return deck.format.trim().toLowerCase() == normalizedFormat;
+          })
+          .toList(growable: false);
+    }
+
+    final bool? shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Match details'),
+          content: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) {
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: matchNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Match name',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: opponentController,
+                      decoration: const InputDecoration(
+                        labelText: 'Opponent',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedFormat.isEmpty
+                          ? null
+                          : selectedFormat,
+                      decoration: const InputDecoration(
+                        labelText: 'Format',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: <DropdownMenuItem<String>>[
+                        const DropdownMenuItem<String>(
+                          value: '',
+                          child: Text('No format'),
+                        ),
+                        ...formatOptions().map((String format) {
+                          return DropdownMenuItem<String>(
+                            value: format,
+                            child: Text(format),
+                          );
+                        }),
+                        const DropdownMenuItem<String>(
+                          value: '__add_format__',
+                          child: Text('Add new format...'),
+                        ),
+                      ],
+                      onChanged: (String? nextValue) async {
+                        if (nextValue == null) {
+                          return;
+                        }
+                        if (nextValue == '__add_format__') {
+                          final String? created = await _promptText(
+                            title: 'New format',
+                            initialValue: '',
+                            hintText: 'Modern, Edison, Commander...',
+                          );
+                          if (created == null) {
+                            return;
+                          }
+                          final String trimmed = created.trim();
+                          if (trimmed.isEmpty) {
+                            return;
+                          }
+                          setDialogState(() {
+                            selectedFormat = trimmed;
+                            if (selectedOpponentDeckId.isNotEmpty) {
+                              final SideboardDeck? selectedOpponentDeck =
+                                  _deckById(selectedOpponentDeckId);
+                              if (selectedOpponentDeck != null &&
+                                  selectedOpponentDeck.format
+                                          .trim()
+                                          .toLowerCase() !=
+                                      trimmed.toLowerCase()) {
+                                selectedOpponentDeckId = '';
+                              }
+                            }
+                          });
+                          return;
+                        }
+                        setDialogState(() {
+                          selectedFormat = nextValue.trim();
+                          if (selectedOpponentDeckId.isNotEmpty) {
+                            final SideboardDeck? selectedOpponentDeck =
+                                _deckById(selectedOpponentDeckId);
+                            if (selectedOpponentDeck != null &&
+                                selectedFormat.isNotEmpty &&
+                                selectedOpponentDeck.format
+                                        .trim()
+                                        .toLowerCase() !=
+                                    selectedFormat.toLowerCase()) {
+                              selectedOpponentDeckId = '';
+                            }
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedDeckId,
+                      decoration: const InputDecoration(
+                        labelText: 'Deck',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: <DropdownMenuItem<String>>[
+                        const DropdownMenuItem<String>(
+                          value: '',
+                          child: Text('No deck'),
+                        ),
+                        ...widget.decks.map((SideboardDeck deck) {
+                          return DropdownMenuItem<String>(
+                            value: deck.id,
+                            child: Text(
+                              deck.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }),
+                      ],
+                      onChanged: (String? nextValue) {
+                        setDialogState(() {
+                          selectedDeckId = (nextValue ?? '').trim();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedOpponentDeckId.isEmpty
+                          ? null
+                          : selectedOpponentDeckId,
+                      decoration: const InputDecoration(
+                        labelText: 'Opponent Deck',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: <DropdownMenuItem<String>>[
+                        const DropdownMenuItem<String>(
+                          value: '',
+                          child: Text('No opponent deck'),
+                        ),
+                        ...opponentDeckOptions().map((SideboardDeck deck) {
+                          return DropdownMenuItem<String>(
+                            value: deck.id,
+                            child: Text(
+                              deck.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }),
+                      ],
+                      onChanged: (String? nextValue) {
+                        setDialogState(() {
+                          selectedOpponentDeckId = (nextValue ?? '').trim();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: tagController,
+                      decoration: const InputDecoration(
+                        labelText: 'Tag',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldSave != true) {
+      matchNameController.dispose();
+      opponentController.dispose();
+      tagController.dispose();
+      return;
+    }
+
+    final SideboardDeck? selectedDeck = _deckById(selectedDeckId);
+    final SideboardDeck? selectedOpponentDeck = _deckById(
+      selectedOpponentDeckId,
+    );
+    _applyMatchMetadata(
+      _metadata.copyWith(
+        name: matchNameController.text.trim(),
+        opponentName: opponentController.text.trim(),
+        deckId: selectedDeck?.id ?? '',
+        deckName: selectedDeck?.name ?? '',
+        format: selectedFormat,
+        opponentDeckId: selectedOpponentDeck?.id ?? '',
+        opponentDeckName: selectedOpponentDeck?.name ?? '',
+        tag: tagController.text.trim(),
+      ),
+    );
+    matchNameController.dispose();
+    opponentController.dispose();
+    tagController.dispose();
+  }
+
+  Future<void> _editGameDetails(GameRecord record) async {
+    String stage = _supportedGameStages.contains(record.gameStage)
+        ? record.gameStage
+        : 'G1';
+    String result = _selectedMatchResult(record);
+
+    final bool? shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Game details'),
+          content: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) {
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: stage,
+                      decoration: const InputDecoration(
+                        labelText: 'Game',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: _supportedGameStages
+                          .map((String item) {
+                            return DropdownMenuItem<String>(
+                              value: item,
+                              child: Text(item),
+                            );
+                          })
+                          .toList(growable: false),
+                      onChanged: (String? nextValue) {
+                        if (nextValue == null) {
+                          return;
+                        }
+                        setDialogState(() {
+                          stage = nextValue;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: result.isEmpty ? null : result,
+                      decoration: const InputDecoration(
+                        labelText: 'Result',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: <DropdownMenuItem<String>>[
+                        const DropdownMenuItem<String>(
+                          value: '',
+                          child: Text('No result'),
+                        ),
+                        ..._supportedMatchResults.map((String item) {
+                          return DropdownMenuItem<String>(
+                            value: item,
+                            child: Text(item),
+                          );
+                        }),
+                      ],
+                      onChanged: (String? nextValue) {
+                        setDialogState(() {
+                          result = (nextValue ?? '').trim();
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldSave != true) {
+      return;
+    }
+
+    _updateGame(record.copyWith(gameStage: stage, matchResult: result));
+  }
+
+  Future<void> _editNotes(GameRecord record) async {
+    final String? result = await _promptText(
+      title: 'Edit game notes',
+      initialValue: record.notes,
+      hintText: 'Write some notes...',
+      maxLines: 6,
+    );
+    if (result == null) {
+      return;
+    }
+    _updateGame(record.copyWith(notes: result.trim()));
+  }
+
+  Future<void> _deleteGame(GameRecord record) async {
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete game'),
+          content: Text('Delete "${record.title}" from this match?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+    if (shouldDelete != true) {
+      return;
+    }
+    setState(() {
+      _games = _games
+          .where((GameRecord game) => game.id != record.id)
+          .toList(growable: false);
+    });
+  }
+
+  Future<void> _showLifePointHistory(GameRecord record) async {
+    final bool hasHistory = record.lifePointHistory.isNotEmpty;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('${record.title} - LP History'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: hasHistory
+                ? _buildLifeHistoryView(
+                    lines: record.lifePointHistory,
+                    dividerColor: Colors.white.withValues(alpha: 0.14),
+                  )
+                : const Text('No life point history saved for this game yet.'),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) {
+          return;
+        }
+        _closeWithResult();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(_effectiveMatchName()),
+          leading: IconButton(
+            onPressed: _closeWithResult,
+            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'Rename match',
+              onPressed: _renameMatch,
+              icon: const Icon(Icons.edit_rounded),
+            ),
+            IconButton(
+              tooltip: 'Edit match details',
+              onPressed: _editMatchMetadata,
+              icon: const Icon(Icons.edit_note_rounded),
+            ),
+          ],
+        ),
+        body: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          children: [
+            Card(
+              color: const Color(0xFF1E1B1B),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _effectiveMatchName(),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _matchResultBackgroundColor(
+                              _matchAggregateResultLabel(
+                                _aggregateMatchResultFromGames(_games),
+                              ),
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            _matchAggregateResultLabel(
+                              _aggregateMatchResultFromGames(_games),
+                            ),
+                            style: TextStyle(
+                              color: _matchResultTextColor(
+                                _matchAggregateResultLabel(
+                                  _aggregateMatchResultFromGames(_games),
+                                ),
+                              ),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Opponent: ${_metadata.opponentName.trim().isEmpty ? '-' : _metadata.opponentName.trim()}',
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Deck: ${_metadata.deckName.trim().isEmpty ? '-' : _metadata.deckName.trim()}',
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Format: ${_metadata.format.trim().isEmpty ? '-' : _metadata.format.trim()}',
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Opponent Deck: ${_metadata.opponentDeckName.trim().isEmpty ? '-' : _metadata.opponentDeckName.trim()}',
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tag: ${_metadata.tag.trim().isEmpty ? '-' : _metadata.tag.trim()}',
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilledButton.tonalIcon(
+                        onPressed: _editMatchMetadata,
+                        icon: const Icon(Icons.edit_note_rounded, size: 18),
+                        label: const Text('Edit match details'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (_games.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Center(
+                  child: Text(
+                    'No games in this match.',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.74),
+                    ),
+                  ),
+                ),
+              )
+            else
+              ..._games.map((GameRecord game) {
+                final String selectedResult = _selectedMatchResult(game);
+                final String stage =
+                    _supportedGameStages.contains(game.gameStage)
+                    ? game.gameStage
+                    : 'G1';
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  color: const Color(0xFF1E1B1B),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '$stage - ${game.title}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _matchResultBackgroundColor(
+                                  selectedResult,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: selectedResult.isEmpty
+                                      ? null
+                                      : selectedResult,
+                                  hint: Text(
+                                    'Result',
+                                    style: TextStyle(
+                                      color: _matchResultTextColor(''),
+                                    ),
+                                  ),
+                                  dropdownColor: const Color(0xFF2B2424),
+                                  style: TextStyle(
+                                    color: _matchResultTextColor(
+                                      selectedResult,
+                                    ),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  items: _supportedMatchResults
+                                      .map((String result) {
+                                        return DropdownMenuItem<String>(
+                                          value: result,
+                                          child: Text(
+                                            result,
+                                            style: TextStyle(
+                                              color: _matchResultTextColor(
+                                                result,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      })
+                                      .toList(growable: false),
+                                  onChanged: (String? nextResult) {
+                                    if (nextResult == null) {
+                                      return;
+                                    }
+                                    _updateGame(
+                                      game.copyWith(matchResult: nextResult),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _formatDateTime(game.createdAt),
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          game.notes.trim().isEmpty ? 'No notes' : game.notes,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: game.notes.trim().isEmpty
+                                ? Colors.white.withValues(alpha: 0.5)
+                                : Colors.white.withValues(alpha: 0.88),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Wrap(
+                                spacing: 2,
+                                runSpacing: 2,
+                                children: [
+                                  TextButton.icon(
+                                    onPressed: () => _editGameDetails(game),
+                                    icon: const Icon(
+                                      Icons.edit_note_rounded,
+                                      size: 16,
+                                    ),
+                                    label: const Text('Details'),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () => _editNotes(game),
+                                    icon: const Icon(
+                                      Icons.sticky_note_2_outlined,
+                                      size: 16,
+                                    ),
+                                    label: const Text('Notes'),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () =>
+                                        _showLifePointHistory(game),
+                                    icon: const Icon(
+                                      Icons.format_list_bulleted_rounded,
+                                      size: 16,
+                                    ),
+                                    label: const Text('LP History'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Delete game',
+                              onPressed: () => _deleteGame(game),
+                              icon: const Icon(Icons.delete_outline_rounded),
+                              color: const Color(0xFFFF8A8A),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum SideboardDeckSortMode { alphabetical, createdAt, favorites, format }
 
 enum SideboardMatchupSortMode { alphabetical, createdAt }
 
@@ -8890,16 +11676,16 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
           return a.name.toLowerCase().compareTo(b.name.toLowerCase());
         });
         break;
-      case SideboardDeckSortMode.tag:
+      case SideboardDeckSortMode.format:
         sorted.sort((SideboardDeck a, SideboardDeck b) {
-          final String tagA = a.tag.trim().toLowerCase();
-          final String tagB = b.tag.trim().toLowerCase();
-          if (tagA.isEmpty != tagB.isEmpty) {
-            return tagA.isEmpty ? 1 : -1;
+          final String formatA = a.format.trim().toLowerCase();
+          final String formatB = b.format.trim().toLowerCase();
+          if (formatA.isEmpty != formatB.isEmpty) {
+            return formatA.isEmpty ? 1 : -1;
           }
-          final int byTag = tagA.compareTo(tagB);
-          if (byTag != 0) {
-            return byTag;
+          final int byFormat = formatA.compareTo(formatB);
+          if (byFormat != 0) {
+            return byFormat;
           }
           return a.name.toLowerCase().compareTo(b.name.toLowerCase());
         });
@@ -8908,35 +11694,48 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
     return sorted;
   }
 
-  List<String> _existingDeckTags() {
-    final Set<String> uniqueTags = <String>{};
+  List<String> _existingDeckFormats() {
+    final Set<String> uniqueFormats = <String>{};
     for (final SideboardDeck deck in _decks) {
-      final String tag = deck.tag.trim();
-      if (tag.isEmpty) {
+      final String format = deck.format.trim();
+      if (format.isEmpty) {
         continue;
       }
-      uniqueTags.add(tag);
+      uniqueFormats.add(format);
     }
-    final List<String> sorted = uniqueTags.toList(growable: false);
+    for (final GameRecord record in _records) {
+      final String format = record.matchFormat.trim();
+      if (format.isEmpty) {
+        continue;
+      }
+      uniqueFormats.add(format);
+    }
+    final List<String> sorted = uniqueFormats.toList(growable: false);
     sorted.sort((String a, String b) {
       return a.toLowerCase().compareTo(b.toLowerCase());
     });
     return sorted;
   }
 
-  Future<({String name, String tag})?> _promptNewDeckData() async {
+  Future<({String name, String format})?> _promptNewDeckData({
+    SideboardDeck? initialDeck,
+  }) async {
     final TextEditingController nameController = TextEditingController();
-    final TextEditingController tagController = TextEditingController();
-    final List<String> existingTags = _existingDeckTags();
+    final TextEditingController formatController = TextEditingController();
+    if (initialDeck != null) {
+      nameController.text = initialDeck.name;
+      formatController.text = initialDeck.format;
+    }
+    final List<String> existingFormats = _existingDeckFormats();
 
     final bool? shouldCreate = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('New deck'),
+          title: Text(initialDeck == null ? 'New deck' : 'Edit deck'),
           content: StatefulBuilder(
             builder: (BuildContext context, StateSetter setDialogState) {
-              final String selectedTag = tagController.text.trim();
+              final String selectedFormat = formatController.text.trim();
               return SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -8952,18 +11751,18 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                     ),
                     const SizedBox(height: 10),
                     TextField(
-                      controller: tagController,
+                      controller: formatController,
                       decoration: const InputDecoration(
-                        labelText: 'Tag',
+                        labelText: 'Format',
                         hintText: 'Modern, Commander, Edison...',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
                     ),
-                    if (existingTags.isNotEmpty) ...[
+                    if (existingFormats.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       Text(
-                        'Existing tags',
+                        'Existing formats',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.white.withValues(alpha: 0.74),
@@ -8974,14 +11773,14 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                         spacing: 6,
                         runSpacing: 6,
                         children: [
-                          for (final String tag in existingTags)
+                          for (final String format in existingFormats)
                             ChoiceChip(
-                              label: Text(tag),
+                              label: Text(format),
                               selected:
-                                  selectedTag.toLowerCase() ==
-                                  tag.toLowerCase(),
+                                  selectedFormat.toLowerCase() ==
+                                  format.toLowerCase(),
                               onSelected: (_) {
-                                tagController.text = tag;
+                                formatController.text = format;
                                 setDialogState(() {});
                               },
                             ),
@@ -9000,7 +11799,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Create'),
+              child: Text(initialDeck == null ? 'Create' : 'Save'),
             ),
           ],
         );
@@ -9012,22 +11811,22 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
     }
 
     final String name = nameController.text.trim();
-    final String tag = tagController.text.trim();
+    final String format = formatController.text.trim();
     if (name.isEmpty) {
       return null;
     }
 
-    return (name: name, tag: tag);
+    return (name: name, format: format);
   }
 
-  Future<bool> _confirmAutoMatchupForTag(String tag) async {
+  Future<bool> _confirmAutoMatchupForFormat(String format) async {
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Synchronize matchups'),
           content: Text(
-            'Do you want to synchronize this deck with the matchup lists of all decks with the same tag?\n\nTag: $tag',
+            'Do you want to synchronize this deck with the matchup lists of all decks with the same format?\n\nFormat: $format',
           ),
           actions: [
             TextButton(
@@ -9067,12 +11866,12 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
     return deduplicated;
   }
 
-  List<SideboardDeck> _synchronizeTagMatchupsForNewDeck({
+  List<SideboardDeck> _synchronizeFormatMatchupsForNewDeck({
     required List<SideboardDeck> decks,
     required SideboardDeck newDeck,
   }) {
-    final String normalizedTag = newDeck.tag.trim().toLowerCase();
-    if (normalizedTag.isEmpty) {
+    final String normalizedFormat = newDeck.format.trim().toLowerCase();
+    if (normalizedFormat.isEmpty) {
       return List<SideboardDeck>.from(decks);
     }
 
@@ -9084,13 +11883,13 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
       return updatedDecks;
     }
 
-    final List<int> sameTagIndexes = <int>[];
+    final List<int> sameFormatIndexes = <int>[];
     for (int index = 0; index < updatedDecks.length; index += 1) {
-      if (updatedDecks[index].tag.trim().toLowerCase() == normalizedTag) {
-        sameTagIndexes.add(index);
+      if (updatedDecks[index].format.trim().toLowerCase() == normalizedFormat) {
+        sameFormatIndexes.add(index);
       }
     }
-    if (sameTagIndexes.isEmpty) {
+    if (sameFormatIndexes.isEmpty) {
       return updatedDecks;
     }
 
@@ -9110,7 +11909,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
       inheritedNames[key] = trimmed;
     }
 
-    for (final int index in sameTagIndexes) {
+    for (final int index in sameFormatIndexes) {
       final SideboardDeck deck = updatedDecks[index];
       if (deck.id != newDeck.id) {
         collectInheritedName(deck.name);
@@ -9150,7 +11949,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
       matchups: _deduplicateMatchupsByName(newDeckMatchups),
     );
 
-    for (final int index in sameTagIndexes) {
+    for (final int index in sameFormatIndexes) {
       final SideboardDeck deck = updatedDecks[index];
       final List<SideboardMatchup> deduplicatedCurrent =
           _deduplicateMatchupsByName(
@@ -9185,7 +11984,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
   }
 
   Future<void> _addDeck() async {
-    final ({String name, String tag})? deckData = await _promptNewDeckData();
+    final ({String name, String format})? deckData = await _promptNewDeckData();
     if (deckData == null) {
       return;
     }
@@ -9198,13 +11997,14 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
       isFavorite: false,
       userNotes: '',
       matchups: const <SideboardMatchup>[],
-      tag: deckData.tag,
+      format: deckData.format,
+      tag: '',
       tcgKey: widget.tcg.storageKey,
     );
 
     bool shouldAutoInsert = false;
-    if (deckData.tag.trim().isNotEmpty) {
-      shouldAutoInsert = await _confirmAutoMatchupForTag(deckData.tag);
+    if (deckData.format.trim().isNotEmpty) {
+      shouldAutoInsert = await _confirmAutoMatchupForFormat(deckData.format);
     }
 
     setState(() {
@@ -9212,9 +12012,30 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
       _decks.insert(0, newDeck);
       if (shouldAutoInsert) {
         _decks = List<SideboardDeck>.from(
-          _synchronizeTagMatchupsForNewDeck(decks: _decks, newDeck: newDeck),
+          _synchronizeFormatMatchupsForNewDeck(decks: _decks, newDeck: newDeck),
         );
       }
+    });
+  }
+
+  Future<void> _editDeck(SideboardDeck deck) async {
+    final ({String name, String format})? updated = await _promptNewDeckData(
+      initialDeck: deck,
+    );
+    if (updated == null) {
+      return;
+    }
+    final int index = _decks.indexWhere(
+      (SideboardDeck item) => item.id == deck.id,
+    );
+    if (index < 0) {
+      return;
+    }
+    setState(() {
+      _decks[index] = _decks[index].copyWith(
+        name: updated.name,
+        format: updated.format,
+      );
     });
   }
 
@@ -9300,8 +12121,8 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                     child: Text('Favorites'),
                   ),
                   PopupMenuItem<SideboardDeckSortMode>(
-                    value: SideboardDeckSortMode.tag,
-                    child: Text('Tag'),
+                    value: SideboardDeckSortMode.format,
+                    child: Text('Format'),
                   ),
                 ];
               },
@@ -9334,10 +12155,10 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                   final String matchupLabel = matchupCount == 1
                       ? '1 matchup'
                       : '$matchupCount matchups';
-                  final String trimmedTag = deck.tag.trim();
-                  final String subtitleText = trimmedTag.isEmpty
+                  final String trimmedFormat = deck.format.trim();
+                  final String subtitleText = trimmedFormat.isEmpty
                       ? matchupLabel
-                      : 'Tag: $trimmedTag  •  $matchupLabel';
+                      : 'Format: $trimmedFormat  •  $matchupLabel';
                   return Card(
                     margin: const EdgeInsets.only(bottom: 10),
                     color: const Color(0xFF1E1B1B),
@@ -9362,6 +12183,11 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          IconButton(
+                            onPressed: () => _editDeck(deck),
+                            tooltip: 'Edit deck',
+                            icon: const Icon(Icons.edit_rounded),
+                          ),
                           IconButton(
                             onPressed: () => _toggleFavorite(deck),
                             tooltip: 'Toggle favorite',
@@ -9407,11 +12233,313 @@ class _SideboardMatchupListScreenState
     extends State<SideboardMatchupListScreen> {
   late List<SideboardMatchup> _matchups;
   late List<GameRecord> _records;
-  late final TextEditingController _userNotesController;
-  double _notesHistoryRatio = 0.42;
-  double _userNotesFontSize = 14;
-  bool _userNotesExpanded = true;
-  bool _matchupHistoryExpanded = true;
+  late String _userNotes;
+
+  @override
+  void initState() {
+    super.initState();
+    _matchups = List<SideboardMatchup>.from(widget.deck.matchups);
+    _records = List<GameRecord>.from(widget.records);
+    _userNotes = widget.deck.userNotes;
+  }
+
+  void _closeWithResult() {
+    Navigator.of(context).pop(
+      SideboardDeckEditResult(
+        deck: widget.deck.copyWith(
+          matchups: _matchups,
+          userNotes: _userNotes.trim(),
+        ),
+        records: List<GameRecord>.from(_records),
+      ),
+    );
+  }
+
+  Future<void> _openUserNotes() async {
+    final String? updated = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (_) => _DeckUserNotesScreen(
+          deckName: widget.deck.name,
+          initialNotes: _userNotes,
+        ),
+      ),
+    );
+    if (updated == null) {
+      return;
+    }
+    setState(() {
+      _userNotes = updated;
+    });
+  }
+
+  Future<void> _openMatchupHistory() async {
+    final _DeckMatchupHistoryResult? result = await Navigator.of(context)
+        .push<_DeckMatchupHistoryResult>(
+          MaterialPageRoute<_DeckMatchupHistoryResult>(
+            builder: (_) => _DeckMatchupHistoryScreen(
+              deck: widget.deck.copyWith(
+                matchups: _matchups,
+                userNotes: _userNotes,
+              ),
+              records: _records,
+            ),
+          ),
+        );
+    if (result == null) {
+      return;
+    }
+    setState(() {
+      _matchups = result.matchups;
+      _records = result.records;
+    });
+  }
+
+  Future<void> _openStatistics() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => _DeckStatisticsScreen(
+          deck: widget.deck.copyWith(
+            matchups: _matchups,
+            userNotes: _userNotes,
+          ),
+          records: _records,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String formatLabel = widget.deck.format.trim().isEmpty
+        ? '-'
+        : widget.deck.format.trim();
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) {
+          return;
+        }
+        _closeWithResult();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.deck.name),
+          leading: IconButton(
+            onPressed: _closeWithResult,
+            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          ),
+        ),
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Card(
+                color: const Color(0xFF1E1B1B),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Format: $formatLabel',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.86),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Choose a section',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _DeckSectionButton(
+                icon: Icons.sticky_note_2_outlined,
+                title: 'User Notes',
+                subtitle: 'Write and update notes for this deck',
+                onTap: _openUserNotes,
+              ),
+              const SizedBox(height: 10),
+              _DeckSectionButton(
+                icon: Icons.history_rounded,
+                title: 'Matchup History',
+                subtitle: 'Sideboard plans and played matchup records',
+                onTap: _openMatchupHistory,
+              ),
+              const SizedBox(height: 10),
+              _DeckSectionButton(
+                icon: Icons.query_stats_rounded,
+                title: 'Statistics',
+                subtitle: 'Deck vs deck results from saved matches',
+                onTap: _openStatistics,
+              ),
+              const Spacer(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+@immutable
+class _DeckMatchupHistoryResult {
+  const _DeckMatchupHistoryResult({
+    required this.matchups,
+    required this.records,
+  });
+
+  final List<SideboardMatchup> matchups;
+  final List<GameRecord> records;
+}
+
+class _DeckSectionButton extends StatelessWidget {
+  const _DeckSectionButton({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      color: const Color(0xFF1E1B1B),
+      child: ListTile(
+        onTap: onTap,
+        leading: Icon(icon, size: 22),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            subtitle,
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.72)),
+          ),
+        ),
+        trailing: const Icon(Icons.chevron_right_rounded),
+      ),
+    );
+  }
+}
+
+class _DeckUserNotesScreen extends StatefulWidget {
+  const _DeckUserNotesScreen({
+    required this.deckName,
+    required this.initialNotes,
+  });
+
+  final String deckName;
+  final String initialNotes;
+
+  @override
+  State<_DeckUserNotesScreen> createState() => _DeckUserNotesScreenState();
+}
+
+class _DeckUserNotesScreenState extends State<_DeckUserNotesScreen> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialNotes);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _closeWithSave() {
+    Navigator.of(context).pop(_controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) {
+          return;
+        }
+        _closeWithSave();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('User Notes'),
+          leading: IconButton(
+            onPressed: _closeWithSave,
+            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          ),
+        ),
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.deckName,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white.withValues(alpha: 0.74),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  decoration: const InputDecoration(
+                    hintText: 'Write notes for this deck...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeckMatchupHistoryScreen extends StatefulWidget {
+  const _DeckMatchupHistoryScreen({required this.deck, required this.records});
+
+  final SideboardDeck deck;
+  final List<GameRecord> records;
+
+  @override
+  State<_DeckMatchupHistoryScreen> createState() =>
+      _DeckMatchupHistoryScreenState();
+}
+
+class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
+  late List<SideboardMatchup> _matchups;
+  late List<GameRecord> _records;
   SideboardMatchupSortMode _matchupSortMode =
       SideboardMatchupSortMode.createdAt;
 
@@ -9420,22 +12548,12 @@ class _SideboardMatchupListScreenState
     super.initState();
     _matchups = List<SideboardMatchup>.from(widget.deck.matchups);
     _records = List<GameRecord>.from(widget.records);
-    _userNotesController = TextEditingController(text: widget.deck.userNotes);
-  }
-
-  @override
-  void dispose() {
-    _userNotesController.dispose();
-    super.dispose();
   }
 
   void _closeWithResult() {
     Navigator.of(context).pop(
-      SideboardDeckEditResult(
-        deck: widget.deck.copyWith(
-          matchups: _matchups,
-          userNotes: _userNotesController.text.trim(),
-        ),
+      _DeckMatchupHistoryResult(
+        matchups: List<SideboardMatchup>.from(_matchups),
         records: List<GameRecord>.from(_records),
       ),
     );
@@ -9445,7 +12563,6 @@ class _SideboardMatchupListScreenState
     required String title,
     required String hintText,
     String initialValue = '',
-    int maxLines = 1,
   }) async {
     return showDialog<String>(
       context: context,
@@ -9454,41 +12571,135 @@ class _SideboardMatchupListScreenState
           title: title,
           initialValue: initialValue,
           hintText: hintText,
-          maxLines: maxLines,
+          maxLines: 1,
         );
       },
     );
   }
 
-  void _updateRecord(GameRecord updatedRecord) {
-    final int index = _records.indexWhere(
-      (GameRecord record) => record.id == updatedRecord.id,
-    );
-    if (index < 0) {
-      return;
+  String _effectiveMatchId(GameRecord record) {
+    final String raw = record.matchId.trim();
+    if (raw.isNotEmpty) {
+      return raw;
     }
-    setState(() {
-      _records[index] = updatedRecord;
+    return 'legacy-${record.id}';
+  }
+
+  String _firstNonEmptyFromNewest(
+    List<GameRecord> games,
+    String Function(GameRecord game) pick,
+  ) {
+    for (int index = games.length - 1; index >= 0; index -= 1) {
+      final String value = pick(games[index]).trim();
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+    return '';
+  }
+
+  List<GameRecord> _recordsForDeck() {
+    final String deckId = widget.deck.id.trim();
+    final String deckName = widget.deck.name.trim().toLowerCase();
+    final List<GameRecord> linked = _records
+        .where((GameRecord record) {
+          if (deckId.isNotEmpty && record.deckId.trim() == deckId) {
+            return true;
+          }
+          return deckName.isNotEmpty &&
+              record.deckName.trim().toLowerCase() == deckName;
+        })
+        .toList(growable: false);
+    linked.sort((GameRecord a, GameRecord b) {
+      return b.createdAt.compareTo(a.createdAt);
     });
+    return linked;
   }
 
-  Future<void> _editRecordNotes(GameRecord record) async {
-    final String? result = await _promptText(
-      title: 'Edit duel notes',
-      hintText: 'Write some notes...',
-      initialValue: record.notes,
-      maxLines: 5,
-    );
-    if (result == null) {
-      return;
+  List<MatchRecord> _linkedMatchRecords() {
+    final List<GameRecord> twoPlayerRecords = _recordsForDeck()
+        .where((GameRecord record) => record.playerCount == 2)
+        .toList(growable: false);
+    if (twoPlayerRecords.isEmpty) {
+      return const <MatchRecord>[];
     }
-    _updateRecord(record.copyWith(notes: result.trim()));
-  }
-
-  String _selectedMatchResult(GameRecord record) {
-    return _supportedMatchResults.contains(record.matchResult)
-        ? record.matchResult
-        : '';
+    final Map<String, List<GameRecord>> grouped = <String, List<GameRecord>>{};
+    for (final GameRecord record in twoPlayerRecords) {
+      final String key = _effectiveMatchId(record);
+      grouped.putIfAbsent(key, () => <GameRecord>[]).add(record);
+    }
+    final List<MatchRecord> matches = <MatchRecord>[];
+    for (final MapEntry<String, List<GameRecord>> entry in grouped.entries) {
+      final List<GameRecord> games = List<GameRecord>.from(entry.value);
+      games.sort((GameRecord a, GameRecord b) {
+        final int byStage = _gameStageSortKey(
+          a.gameStage,
+        ).compareTo(_gameStageSortKey(b.gameStage));
+        if (byStage != 0) {
+          return byStage;
+        }
+        return a.createdAt.compareTo(b.createdAt);
+      });
+      final DateTime createdAt = games
+          .map((GameRecord game) => game.createdAt)
+          .reduce((DateTime a, DateTime b) => a.isBefore(b) ? a : b);
+      final DateTime updatedAt = games
+          .map((GameRecord game) => game.createdAt)
+          .reduce((DateTime a, DateTime b) => a.isAfter(b) ? a : b);
+      final String name = _firstNonEmptyFromNewest(
+        games,
+        (GameRecord game) => game.matchName.trim(),
+      );
+      final String opponent = _firstNonEmptyFromNewest(games, (
+        GameRecord game,
+      ) {
+        final String v = game.opponentName.trim();
+        if (v.isNotEmpty) {
+          return v;
+        }
+        return game.playerTwoName.trim();
+      });
+      final String deckName = _firstNonEmptyFromNewest(
+        games,
+        (GameRecord game) => game.deckName.trim(),
+      );
+      final String opponentDeckName = _firstNonEmptyFromNewest(
+        games,
+        (GameRecord game) => game.opponentDeckName.trim(),
+      );
+      final String format = _firstNonEmptyFromNewest(
+        games,
+        (GameRecord game) => game.matchFormat.trim(),
+      );
+      final String tag = _firstNonEmptyFromNewest(
+        games,
+        (GameRecord game) => game.matchTag.trim(),
+      );
+      matches.add(
+        MatchRecord(
+          id: entry.key,
+          tcgKey: widget.deck.tcgKey,
+          metadata: MatchMetadata(
+            name: name.isEmpty ? 'Match' : name,
+            opponentName: opponent,
+            deckId: widget.deck.id,
+            deckName: deckName,
+            opponentDeckId: '',
+            opponentDeckName: opponentDeckName,
+            format: format,
+            tag: tag,
+          ),
+          createdAt: createdAt,
+          updatedAt: updatedAt,
+          games: games,
+          aggregateResult: _aggregateMatchResultFromGames(games),
+        ),
+      );
+    }
+    matches.sort((MatchRecord a, MatchRecord b) {
+      return b.createdAt.compareTo(a.createdAt);
+    });
+    return matches;
   }
 
   Color _matchResultBackgroundColor(String result) {
@@ -9517,92 +12728,6 @@ class _SideboardMatchupListScreenState
     return Colors.white.withValues(alpha: 0.86);
   }
 
-  Future<void> _playLinkedDuel(GameRecord record) async {
-    DuelResultPayload? duelResult;
-
-    if (widget.deck.tcgKey == SupportedTcg.mtg.storageKey) {
-      final MtgDuelSetupResult? setupResult = await Navigator.of(context)
-          .push<MtgDuelSetupResult>(
-            MaterialPageRoute<MtgDuelSetupResult>(
-              builder: (_) => MtgDuelSetupScreen(settings: widget.settings),
-            ),
-          );
-      if (setupResult == null || !mounted) {
-        return;
-      }
-      duelResult = await Navigator.of(context).push<DuelResultPayload>(
-        MaterialPageRoute<DuelResultPayload>(
-          builder: (_) => MtgDuelScreen(
-            settings: widget.settings,
-            playerCount: setupResult.playerCount,
-            initialLifePoints: setupResult.initialLifePoints,
-            layoutMode: setupResult.layoutMode,
-            availableDeckNames: <String>[widget.deck.name],
-            availableDecks: <SideboardDeck>[widget.deck],
-            initialDeckName: record.deckName.trim().isEmpty
-                ? widget.deck.name
-                : record.deckName.trim(),
-          ),
-        ),
-      );
-    } else {
-      duelResult = await Navigator.of(context).push<DuelResultPayload>(
-        MaterialPageRoute<DuelResultPayload>(
-          builder: (_) => DuelScreen(
-            settings: widget.settings,
-            availableDeckNames: <String>[widget.deck.name],
-            availableDecks: <SideboardDeck>[widget.deck],
-            initialDeckName: record.deckName.trim().isEmpty
-                ? widget.deck.name
-                : record.deckName.trim(),
-          ),
-        ),
-      );
-    }
-
-    if (duelResult == null || !duelResult.shouldSave) {
-      return;
-    }
-
-    _updateRecord(
-      record.copyWith(
-        lifePointHistory: List<String>.from(duelResult.lifePointHistory),
-        deckId: widget.deck.id,
-        gameStage: duelResult.gameStage.trim().isEmpty
-            ? record.gameStage
-            : duelResult.gameStage,
-        matchResult: duelResult.matchResult.trim().isEmpty
-            ? record.matchResult
-            : duelResult.matchResult,
-        opponentName: duelResult.opponentName.trim().isEmpty
-            ? record.opponentName
-            : duelResult.opponentName.trim(),
-        playerTwoName: duelResult.opponentName.trim().isEmpty
-            ? record.playerTwoName
-            : duelResult.opponentName.trim(),
-        deckName: widget.deck.name,
-      ),
-    );
-  }
-
-  List<GameRecord> _recordsForDeck() {
-    final String deckId = widget.deck.id.trim();
-    final String deckName = widget.deck.name.trim().toLowerCase();
-    final List<GameRecord> linked = _records
-        .where((GameRecord record) {
-          if (record.deckId.trim() == deckId && deckId.isNotEmpty) {
-            return true;
-          }
-          final String recordDeckName = record.deckName.trim().toLowerCase();
-          return deckName.isNotEmpty && recordDeckName == deckName;
-        })
-        .toList(growable: false);
-    linked.sort((GameRecord a, GameRecord b) {
-      return b.createdAt.compareTo(a.createdAt);
-    });
-    return linked;
-  }
-
   Future<void> _addMatchup() async {
     final String? rawName = await _promptText(
       title: 'New matchup',
@@ -9611,12 +12736,10 @@ class _SideboardMatchupListScreenState
     if (rawName == null) {
       return;
     }
-
     final String name = rawName.trim();
     if (name.isEmpty) {
       return;
     }
-
     final DateTime now = DateTime.now();
     setState(() {
       _matchups.insert(
@@ -9633,347 +12756,24 @@ class _SideboardMatchupListScreenState
   }
 
   Future<void> _openMatchup(SideboardMatchup matchup) async {
-    final SideboardMatchup? updatedMatchup = await Navigator.of(context)
+    final SideboardMatchup? updated = await Navigator.of(context)
         .push<SideboardMatchup>(
           MaterialPageRoute<SideboardMatchup>(
             builder: (_) => SideboardPlanScreen(matchup: matchup),
           ),
         );
-    if (updatedMatchup == null) {
+    if (updated == null) {
       return;
     }
-
     final int index = _matchups.indexWhere(
       (SideboardMatchup item) => item.id == matchup.id,
     );
     if (index < 0) {
       return;
     }
-
     setState(() {
-      _matchups[index] = updatedMatchup;
+      _matchups[index] = updated;
     });
-  }
-
-  Widget _buildUserNotesCard() {
-    final bool isCollapsed = !_userNotesExpanded;
-    return Card(
-      color: const Color(0xFF1E1B1B),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text(
-                  'User Notes',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                ),
-                const Spacer(),
-                if (!isCollapsed) ...[
-                  IconButton(
-                    tooltip: 'Smaller text',
-                    onPressed: () {
-                      setState(() {
-                        _userNotesFontSize = (_userNotesFontSize - 1).clamp(
-                          11.0,
-                          24.0,
-                        );
-                      });
-                    },
-                    icon: const Icon(Icons.text_decrease_rounded, size: 20),
-                  ),
-                  IconButton(
-                    tooltip: 'Larger text',
-                    onPressed: () {
-                      setState(() {
-                        _userNotesFontSize = (_userNotesFontSize + 1).clamp(
-                          11.0,
-                          24.0,
-                        );
-                      });
-                    },
-                    icon: const Icon(Icons.text_increase_rounded, size: 20),
-                  ),
-                ],
-                IconButton(
-                  tooltip: isCollapsed ? 'Expand section' : 'Collapse section',
-                  onPressed: () {
-                    setState(() {
-                      if (isCollapsed) {
-                        _userNotesExpanded = true;
-                        _matchupHistoryExpanded = true;
-                        _notesHistoryRatio = max(_notesHistoryRatio, 0.5);
-                      } else {
-                        _userNotesExpanded = false;
-                      }
-                    });
-                  },
-                  icon: Icon(
-                    isCollapsed
-                        ? Icons.keyboard_arrow_down_rounded
-                        : Icons.keyboard_arrow_up_rounded,
-                    size: 22,
-                  ),
-                ),
-              ],
-            ),
-            if (!isCollapsed) ...[
-              const SizedBox(height: 8),
-              Expanded(
-                child: TextField(
-                  controller: _userNotesController,
-                  maxLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
-                  style: TextStyle(fontSize: _userNotesFontSize, height: 1.3),
-                  decoration: const InputDecoration(
-                    hintText: 'Write notes for this deck...',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMatchupHistoryCard() {
-    final List<GameRecord> linkedRecords = _recordsForDeck();
-    final bool isCollapsed = !_matchupHistoryExpanded;
-    return Card(
-      color: const Color(0xFF1E1B1B),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text(
-                  'Matchup History',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                ),
-                const Spacer(),
-                IconButton(
-                  tooltip: isCollapsed ? 'Expand section' : 'Collapse section',
-                  onPressed: () {
-                    setState(() {
-                      _matchupHistoryExpanded = !_matchupHistoryExpanded;
-                    });
-                  },
-                  icon: Icon(
-                    isCollapsed
-                        ? Icons.keyboard_arrow_down_rounded
-                        : Icons.keyboard_arrow_up_rounded,
-                    size: 22,
-                  ),
-                ),
-              ],
-            ),
-            if (!isCollapsed) ...[
-              const SizedBox(height: 8),
-              Expanded(
-                child: linkedRecords.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No linked duels yet.',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.66),
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: linkedRecords.length,
-                        itemBuilder: (BuildContext context, int index) {
-                          final GameRecord record = linkedRecords[index];
-                          final String stage =
-                              _supportedGameStages.contains(record.gameStage)
-                              ? record.gameStage
-                              : 'G1';
-                          final String selectedResult = _selectedMatchResult(
-                            record,
-                          );
-                          final String opponentLabel =
-                              record.opponentName.trim().isNotEmpty
-                              ? record.opponentName.trim()
-                              : record.playerTwoName.trim().isNotEmpty
-                              ? record.playerTwoName.trim()
-                              : 'Player 2';
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.04),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  record.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _formatDateTime(record.createdAt),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.white.withValues(alpha: 0.68),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Opponent: $opponentLabel',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white.withValues(alpha: 0.82),
-                                  ),
-                                ),
-                                if (record.notes.trim().isNotEmpty) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    record.notes,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.76,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                Row(
-                                  children: [
-                                    DropdownButton<String>(
-                                      value: stage,
-                                      items: _supportedGameStages
-                                          .map((String nextStage) {
-                                            return DropdownMenuItem<String>(
-                                              value: nextStage,
-                                              child: Text(nextStage),
-                                            );
-                                          })
-                                          .toList(growable: false),
-                                      onChanged: (String? nextStage) {
-                                        if (nextStage == null) {
-                                          return;
-                                        }
-                                        _updateRecord(
-                                          record.copyWith(gameStage: nextStage),
-                                        );
-                                      },
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _matchResultBackgroundColor(
-                                          selectedResult,
-                                        ),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: DropdownButtonHideUnderline(
-                                        child: DropdownButton<String>(
-                                          value: selectedResult.isEmpty
-                                              ? null
-                                              : selectedResult,
-                                          hint: Text(
-                                            'Result',
-                                            style: TextStyle(
-                                              color: _matchResultTextColor(''),
-                                            ),
-                                          ),
-                                          dropdownColor: const Color(
-                                            0xFF2B2424,
-                                          ),
-                                          style: TextStyle(
-                                            color: _matchResultTextColor(
-                                              selectedResult,
-                                            ),
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                          items: _supportedMatchResults
-                                              .map((String result) {
-                                                return DropdownMenuItem<String>(
-                                                  value: result,
-                                                  child: Text(
-                                                    result,
-                                                    style: TextStyle(
-                                                      color:
-                                                          _matchResultTextColor(
-                                                            result,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                );
-                                              })
-                                              .toList(growable: false),
-                                          onChanged: (String? nextResult) {
-                                            if (nextResult == null) {
-                                              return;
-                                            }
-                                            _updateRecord(
-                                              record.copyWith(
-                                                matchResult: nextResult,
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    FilledButton.tonalIcon(
-                                      onPressed: () => _playLinkedDuel(record),
-                                      style: FilledButton.styleFrom(
-                                        minimumSize: const Size(0, 34),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                        ),
-                                      ),
-                                      icon: const Icon(
-                                        Icons.play_arrow_rounded,
-                                        size: 18,
-                                      ),
-                                      label: const Text('Play'),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    IconButton(
-                                      tooltip: 'Edit notes',
-                                      onPressed: () => _editRecordNotes(record),
-                                      icon: const Icon(
-                                        Icons.sticky_note_2_outlined,
-                                        size: 18,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
   }
 
   List<SideboardMatchup> _sortedMatchups() {
@@ -9997,51 +12797,8 @@ class _SideboardMatchupListScreenState
 
   @override
   Widget build(BuildContext context) {
-    final double bottomSectionHeight =
-        (MediaQuery.of(context).size.height * 0.42)
-            .clamp(220.0, 420.0)
-            .toDouble();
     final List<SideboardMatchup> sortedMatchups = _sortedMatchups();
-    final Widget matchupList = _matchups.isEmpty
-        ? Center(
-            child: Text(
-              'No matchups yet.\nTap + to add one.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.74)),
-            ),
-          )
-        : ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
-            itemCount: sortedMatchups.length,
-            itemBuilder: (BuildContext context, int index) {
-              final SideboardMatchup matchup = sortedMatchups[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                color: const Color(0xFF1E1B1B),
-                child: ListTile(
-                  onTap: () => _openMatchup(matchup),
-                  title: Text(
-                    matchup.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      'Side In: ${matchup.sideIn.length}  •  Side Out: ${matchup.sideOut.length}',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.75),
-                      ),
-                    ),
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                ),
-              );
-            },
-          );
-
+    final List<MatchRecord> linkedMatches = _linkedMatchRecords();
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) {
@@ -10052,7 +12809,7 @@ class _SideboardMatchupListScreenState
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(widget.deck.name),
+          title: const Text('Matchup History'),
           leading: IconButton(
             onPressed: _closeWithResult,
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
@@ -10086,90 +12843,373 @@ class _SideboardMatchupListScreenState
             ),
           ],
         ),
-        body: Padding(
+        body: ListView(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          child: Column(
-            children: [
-              Expanded(child: matchupList),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: bottomSectionHeight,
-                child: LayoutBuilder(
-                  builder: (BuildContext context, BoxConstraints constraints) {
-                    const double dragHandleHeight = 20;
-                    const double collapsedSectionHeight = 64;
-                    final double contentHeight = max(
-                      0,
-                      constraints.maxHeight - dragHandleHeight,
-                    );
-                    late final double topHeight;
-                    late final double bottomHeight;
-
-                    if (!_userNotesExpanded && !_matchupHistoryExpanded) {
-                      topHeight = min(
-                        collapsedSectionHeight,
-                        contentHeight / 2,
-                      );
-                      bottomHeight = max(0, contentHeight - topHeight);
-                    } else if (!_userNotesExpanded) {
-                      topHeight = min(collapsedSectionHeight, contentHeight);
-                      bottomHeight = max(0, contentHeight - topHeight);
-                    } else if (!_matchupHistoryExpanded) {
-                      bottomHeight = min(collapsedSectionHeight, contentHeight);
-                      topHeight = max(0, contentHeight - bottomHeight);
-                    } else {
-                      topHeight = contentHeight * _notesHistoryRatio;
-                      bottomHeight = contentHeight - topHeight;
-                    }
-
-                    return Column(
-                      children: [
-                        SizedBox(
-                          height: topHeight,
-                          child: _buildUserNotesCard(),
+          children: [
+            Text(
+              'Sideboard Plans',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                color: Colors.white.withValues(alpha: 0.92),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (sortedMatchups.isEmpty)
+              Card(
+                color: const Color(0xFF1E1B1B),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Text(
+                    'No matchups yet. Tap + to add one.',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.74),
+                    ),
+                  ),
+                ),
+              )
+            else
+              ...sortedMatchups.map((SideboardMatchup matchup) {
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  color: const Color(0xFF1E1B1B),
+                  child: ListTile(
+                    onTap: () => _openMatchup(matchup),
+                    title: Text(
+                      matchup.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Side In: ${matchup.sideIn.length}  •  Side Out: ${matchup.sideOut.length}',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.75),
                         ),
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onVerticalDragUpdate: (DragUpdateDetails details) {
-                            if (contentHeight <= 0 ||
-                                !_userNotesExpanded ||
-                                !_matchupHistoryExpanded) {
-                              return;
-                            }
-                            setState(() {
-                              _notesHistoryRatio =
-                                  (_notesHistoryRatio +
-                                          (details.delta.dy / contentHeight))
-                                      .clamp(0.2, 0.8);
-                            });
-                          },
-                          child: SizedBox(
-                            height: dragHandleHeight,
-                            child: Center(
-                              child: Container(
-                                width: 60,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.32),
-                                  borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                  ),
+                );
+              }),
+            const SizedBox(height: 12),
+            Text(
+              'Played Matchups',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                color: Colors.white.withValues(alpha: 0.92),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (linkedMatches.isEmpty)
+              Card(
+                color: const Color(0xFF1E1B1B),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Text(
+                    'No saved matches for this deck yet.',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.74),
+                    ),
+                  ),
+                ),
+              )
+            else
+              ...linkedMatches.map((MatchRecord match) {
+                final String opponent =
+                    match.metadata.opponentName.trim().isEmpty
+                    ? '-'
+                    : match.metadata.opponentName.trim();
+                final String opponentDeck =
+                    match.metadata.opponentDeckName.trim().isEmpty
+                    ? '-'
+                    : match.metadata.opponentDeckName.trim();
+                final String resultLabel = _matchAggregateResultLabel(
+                  match.aggregateResult,
+                );
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  color: const Color(0xFF1E1B1B),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                match.metadata.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
                                 ),
                               ),
                             ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _matchResultBackgroundColor(resultLabel),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                resultLabel,
+                                style: TextStyle(
+                                  color: _matchResultTextColor(resultLabel),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatDateTime(match.createdAt),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.7),
                           ),
                         ),
-                        SizedBox(
-                          height: bottomHeight,
-                          child: _buildMatchupHistoryCard(),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Opponent: $opponent',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.82),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Opponent Deck: $opponentDeck',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.78),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${match.games.length} game${match.games.length == 1 ? '' : 's'}',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 12,
+                          ),
                         ),
                       ],
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
+                    ),
+                  ),
+                );
+              }),
+          ],
         ),
       ),
+    );
+  }
+}
+
+@immutable
+class _DeckStatisticsRow {
+  const _DeckStatisticsRow({
+    required this.opponentDeck,
+    required this.matches,
+    required this.wins,
+    required this.losses,
+    required this.draws,
+  });
+
+  final String opponentDeck;
+  final int matches;
+  final int wins;
+  final int losses;
+  final int draws;
+}
+
+class _DeckStatisticsScreen extends StatelessWidget {
+  const _DeckStatisticsScreen({required this.deck, required this.records});
+
+  final SideboardDeck deck;
+  final List<GameRecord> records;
+
+  String _effectiveMatchId(GameRecord record) {
+    final String raw = record.matchId.trim();
+    if (raw.isNotEmpty) {
+      return raw;
+    }
+    return 'legacy-${record.id}';
+  }
+
+  String _firstNonEmptyFromNewest(
+    List<GameRecord> games,
+    String Function(GameRecord game) pick,
+  ) {
+    for (int index = games.length - 1; index >= 0; index -= 1) {
+      final String value = pick(games[index]).trim();
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+    return '';
+  }
+
+  List<GameRecord> _recordsForDeck() {
+    final String deckId = deck.id.trim();
+    final String deckName = deck.name.trim().toLowerCase();
+    final List<GameRecord> linked = records
+        .where((GameRecord record) {
+          if (deckId.isNotEmpty && record.deckId.trim() == deckId) {
+            return true;
+          }
+          return deckName.isNotEmpty &&
+              record.deckName.trim().toLowerCase() == deckName;
+        })
+        .where((GameRecord record) => record.playerCount == 2)
+        .toList(growable: false);
+    linked.sort((GameRecord a, GameRecord b) {
+      return b.createdAt.compareTo(a.createdAt);
+    });
+    return linked;
+  }
+
+  List<_DeckStatisticsRow> _statsRows() {
+    final List<GameRecord> linked = _recordsForDeck();
+    if (linked.isEmpty) {
+      return const <_DeckStatisticsRow>[];
+    }
+    final Map<String, List<GameRecord>> groupedMatches =
+        <String, List<GameRecord>>{};
+    for (final GameRecord record in linked) {
+      final String key = _effectiveMatchId(record);
+      groupedMatches.putIfAbsent(key, () => <GameRecord>[]).add(record);
+    }
+
+    final Map<String, ({int matches, int wins, int losses, int draws})> table =
+        <String, ({int matches, int wins, int losses, int draws})>{};
+
+    for (final List<GameRecord> games in groupedMatches.values) {
+      games.sort((GameRecord a, GameRecord b) {
+        final int byStage = _gameStageSortKey(
+          a.gameStage,
+        ).compareTo(_gameStageSortKey(b.gameStage));
+        if (byStage != 0) {
+          return byStage;
+        }
+        return a.createdAt.compareTo(b.createdAt);
+      });
+      final String opponentDeck = _firstNonEmptyFromNewest(
+        games,
+        (GameRecord game) => game.opponentDeckName.trim(),
+      );
+      final String key = opponentDeck.isEmpty ? '-' : opponentDeck;
+      final MatchAggregateResult aggregate = _aggregateMatchResultFromGames(
+        games,
+      );
+      final ({int matches, int wins, int losses, int draws}) current =
+          table[key] ?? (matches: 0, wins: 0, losses: 0, draws: 0);
+      int wins = current.wins;
+      int losses = current.losses;
+      int draws = current.draws;
+      if (aggregate == MatchAggregateResult.win) {
+        wins += 1;
+      } else if (aggregate == MatchAggregateResult.loss) {
+        losses += 1;
+      } else if (aggregate == MatchAggregateResult.draw) {
+        draws += 1;
+      }
+      table[key] = (
+        matches: current.matches + 1,
+        wins: wins,
+        losses: losses,
+        draws: draws,
+      );
+    }
+
+    final List<_DeckStatisticsRow> rows = table.entries
+        .map((
+          MapEntry<String, ({int matches, int wins, int losses, int draws})> e,
+        ) {
+          return _DeckStatisticsRow(
+            opponentDeck: e.key,
+            matches: e.value.matches,
+            wins: e.value.wins,
+            losses: e.value.losses,
+            draws: e.value.draws,
+          );
+        })
+        .toList(growable: false);
+    rows.sort((_DeckStatisticsRow a, _DeckStatisticsRow b) {
+      return a.opponentDeck.toLowerCase().compareTo(
+        b.opponentDeck.toLowerCase(),
+      );
+    });
+    return rows;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<_DeckStatisticsRow> rows = _statsRows();
+    return Scaffold(
+      appBar: AppBar(title: const Text('Statistics')),
+      body: rows.isEmpty
+          ? Center(
+              child: Text(
+                'No match data for this deck yet.',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.74)),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              itemCount: rows.length,
+              itemBuilder: (BuildContext context, int index) {
+                final _DeckStatisticsRow row = rows[index];
+                final double winRate = row.matches == 0
+                    ? 0
+                    : (row.wins / row.matches) * 100;
+                final double lossRate = row.matches == 0
+                    ? 0
+                    : (row.losses / row.matches) * 100;
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  color: const Color(0xFF1E1B1B),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'vs ${row.opponentDeck}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text('Matches: ${row.matches}'),
+                        const SizedBox(height: 2),
+                        Text('Wins: ${row.wins}'),
+                        const SizedBox(height: 2),
+                        Text('Losses: ${row.losses}'),
+                        if (row.draws > 0) ...[
+                          const SizedBox(height: 2),
+                          Text('Draws: ${row.draws}'),
+                        ],
+                        const SizedBox(height: 6),
+                        Text('Winrate: ${winRate.toStringAsFixed(1)}%'),
+                        const SizedBox(height: 2),
+                        Text('Loss rate: ${lossRate.toStringAsFixed(1)}%'),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
