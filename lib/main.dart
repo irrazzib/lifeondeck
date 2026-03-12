@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -14,6 +15,405 @@ const Set<String> _supportedTcgStorageKeys = <String>{
   'lorcana',
 };
 const String _appBuildTag = 'build 8286103';
+const String _onboardingCompletedKey = 'onboarding_completed_v1';
+const String _seenInfoTipsKey = 'seen_info_tips_v1';
+
+enum AppLanguage { system, english, italian }
+
+extension AppLanguageX on AppLanguage {
+  String get storageKey {
+    switch (this) {
+      case AppLanguage.system:
+        return 'system';
+      case AppLanguage.english:
+        return 'en';
+      case AppLanguage.italian:
+        return 'it';
+    }
+  }
+
+  String get localeCode {
+    switch (this) {
+      case AppLanguage.english:
+        return 'en';
+      case AppLanguage.italian:
+        return 'it';
+      case AppLanguage.system:
+        final Locale systemLocale =
+            WidgetsBinding.instance.platformDispatcher.locale;
+        if (systemLocale.languageCode.toLowerCase().startsWith('it')) {
+          return 'it';
+        }
+        return 'en';
+    }
+  }
+
+  Locale? get materialLocale {
+    switch (this) {
+      case AppLanguage.system:
+        return null;
+      case AppLanguage.english:
+        return const Locale('en');
+      case AppLanguage.italian:
+        return const Locale('it');
+    }
+  }
+
+  static AppLanguage fromStorageKey(String? raw) {
+    final String normalized = (raw ?? '').trim().toLowerCase();
+    switch (normalized) {
+      case 'en':
+        return AppLanguage.english;
+      case 'it':
+        return AppLanguage.italian;
+      case 'system':
+      default:
+        return AppLanguage.system;
+    }
+  }
+}
+
+class AppRuntimeConfig {
+  static final ValueNotifier<AppLanguage> language = ValueNotifier<AppLanguage>(
+    AppLanguage.system,
+  );
+}
+
+class InfoTipIds {
+  static const String matchHistory = 'match_history';
+  static const String statistics = 'statistics';
+  static const String sideboardGuide = 'sideboard_guide';
+  static const String opponentDeckSelection = 'opponent_deck_selection';
+}
+
+class AppUxStateStore {
+  const AppUxStateStore._();
+
+  static Future<bool> onboardingCompleted() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_onboardingCompletedKey) ?? false;
+  }
+
+  static Future<void> setOnboardingCompleted(bool value) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onboardingCompletedKey, value);
+  }
+
+  static Future<Set<String>> loadSeenInfoTips() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final List<String> raw =
+        prefs.getStringList(_seenInfoTipsKey) ?? <String>[];
+    return raw
+        .map((String item) => item.trim())
+        .where((String item) => item.isNotEmpty)
+        .toSet();
+  }
+
+  static Future<bool> hasSeenInfoTip(String tipId) async {
+    final Set<String> seen = await loadSeenInfoTips();
+    return seen.contains(tipId);
+  }
+
+  static Future<void> markInfoTipSeen(String tipId) async {
+    final Set<String> seen = await loadSeenInfoTips();
+    seen.add(tipId);
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_seenInfoTipsKey, seen.toList(growable: false));
+  }
+}
+
+@immutable
+class AppStrings {
+  const AppStrings(this.languageCode);
+
+  final String languageCode;
+
+  static const Map<String, Map<String, String>>
+  _catalog = <String, Map<String, String>>{
+    'en': <String, String>{
+      'app.title': 'TCG Life Counter',
+      'common.skip': 'Skip',
+      'common.next': 'Next',
+      'common.continue': 'Continue',
+      'common.gotIt': 'Got it',
+      'common.close': 'Close',
+      'common.cancel': 'Cancel',
+      'common.save': 'Save',
+      'common.notNow': 'Not now',
+      'common.premium': 'Premium feature',
+      'tcg.yugioh': 'Yugioh',
+      'tcg.mtg': 'MTG',
+      'tcg.riftbound': 'Riftbound',
+      'tcg.lorcana': 'Lorcana',
+      'home.letsDuel': "Let's Duel",
+      'home.gameHistory': 'Game History',
+      'home.decksUtility': "Deck's Utility",
+      'home.decksUtilitySubtitle': 'Decks, Sideboard and Plans',
+      'home.customizeApp': 'Customize App',
+      'home.topBottomPlayers': 'Top and bottom players',
+      'home.savedMatches': '{count} saved matches',
+      'home.premiumSaved': 'Premium feature • {count} saved',
+      'home.namesAndColors': 'Names and colors',
+      'home.comingSoon': "Coming soon! Contact me if you're interested.",
+      'home.upgradeProTitle': 'Upgrade to Pro',
+      'home.upgradeProBody':
+          '{feature} is available only in Pro.\n\nAdd your real price later in App Store. For now you can test it with a demo unlock.',
+      'home.buyProDemo': 'Buy Pro (demo)',
+      'home.savedGamesToast': 'Saved {count} game(s) to Game History ({total})',
+      'onboarding.title1': 'Track Games and Matches',
+      'onboarding.body1':
+          'Save single games and complete matches with a clear timeline.',
+      'onboarding.title2': 'Save Decks, Opponents and Formats',
+      'onboarding.body2':
+          'Store deck, opponent deck, format and tags as match metadata.',
+      'onboarding.title3': 'Review Statistics and Utilities',
+      'onboarding.body3':
+          'Open matchup history, statistics, notes and sideboard tools anytime.',
+      'info.matchHistory.title': 'Match History',
+      'info.matchHistory.body':
+          'This area groups your saved matches and keeps game details in order.',
+      'info.statistics.title': 'Statistics',
+      'info.statistics.body':
+          'Statistics are calculated from saved match results, not single life changes.',
+      'info.sideboardGuide.title': 'Sideboard Guide',
+      'info.sideboardGuide.body':
+          'Open your saved side-in and side-out plans for the selected deck.',
+      'info.opponentDeck.title': 'Opponent Deck',
+      'info.opponentDeck.body':
+          'Pick an existing opponent deck or create one quickly from the dropdown.',
+      'customize.title': 'Customize App',
+      'customize.players': 'Players',
+      'customize.player1Name': 'Player 1 name',
+      'customize.player2Name': 'Player 2 name',
+      'customize.startup': 'Startup',
+      'customize.openWith': 'Open app with',
+      'customize.language': 'Language',
+      'customize.languageSystem': 'System default',
+      'customize.languageEnglish': 'English',
+      'customize.languageItalian': 'Italiano',
+      'customize.colors': 'Colors',
+      'customize.bgStart': 'Background start',
+      'customize.bgEnd': 'Background end',
+      'customize.buttonColor': 'Button color',
+      'customize.lpBg': 'Life Points background',
+      'customize.preview': 'Preview',
+      'customize.button': 'Button',
+      'labels.player1': 'Player 1',
+      'labels.player2': 'Player 2',
+      'history.title': 'Game History',
+      'history.empty':
+          'No games tracked yet.\nStart a game or create one manually.',
+      'history.sortFilter': 'Sort/filter',
+      'history.byDate': 'By date',
+      'history.byName': 'By name',
+      'history.byTag': 'By tag',
+      'history.allTags': 'All tags',
+      'history.noMatchesForTag': 'No matches for "{tag}".',
+      'history.importTxt': 'Import .txt',
+      'history.exportTxt': 'Export .txt',
+      'history.addMatch': 'Add match',
+      'history.addGame': 'Add game',
+      'statistics.title': 'Statistics',
+      'statistics.empty': 'No match data for this deck yet.',
+      'statistics.vs': 'vs {deck}',
+      'statistics.matches': 'Matches: {count}',
+      'statistics.wins': 'Wins: {count}',
+      'statistics.losses': 'Losses: {count}',
+      'statistics.draws': 'Draws: {count}',
+      'statistics.winrate': 'Winrate: {value}%',
+      'statistics.lossRate': 'Loss rate: {value}%',
+      'section.userNotes': 'User Notes',
+      'section.matchupHistory': 'Matchup History',
+      'section.statistics': 'Statistics',
+      'section.sideboardPlans': 'Sideboard Plans',
+      'section.chooseSection': 'Choose a section',
+      'field.opponent': 'Opponent',
+      'field.deck': 'Deck',
+      'field.opponentDeck': 'Opponent Deck',
+      'field.format': 'Format',
+      'field.tag': 'Tag',
+      'field.gamesCount': '{count} game(s)',
+    },
+    'it': <String, String>{
+      'app.title': 'TCG Life Counter',
+      'common.skip': 'Salta',
+      'common.next': 'Avanti',
+      'common.continue': 'Continua',
+      'common.gotIt': 'Capito',
+      'common.close': 'Chiudi',
+      'common.cancel': 'Annulla',
+      'common.save': 'Salva',
+      'common.notNow': 'Non ora',
+      'common.premium': 'Funzionalita premium',
+      'tcg.yugioh': 'Yugioh',
+      'tcg.mtg': 'MTG',
+      'tcg.riftbound': 'Riftbound',
+      'tcg.lorcana': 'Lorcana',
+      'home.letsDuel': 'Let\'s Duel',
+      'home.gameHistory': 'Cronologia Partite',
+      'home.decksUtility': 'Deck\'s Utility',
+      'home.decksUtilitySubtitle': 'Deck, Sideboard e Piani',
+      'home.customizeApp': 'Personalizza App',
+      'home.topBottomPlayers': 'Giocatori alto e basso',
+      'home.savedMatches': '{count} match salvati',
+      'home.premiumSaved': 'Funzionalita premium • {count} salvati',
+      'home.namesAndColors': 'Nomi e colori',
+      'home.comingSoon': 'In arrivo! Contattami se sei interessato.',
+      'home.upgradeProTitle': 'Passa a Pro',
+      'home.upgradeProBody':
+          '{feature} e disponibile solo nella Pro.\n\nAggiungerai il prezzo reale in App Store. Per ora puoi testare con lo sblocco demo.',
+      'home.buyProDemo': 'Acquista Pro (demo)',
+      'home.savedGamesToast': 'Salvati {count} game nella cronologia ({total})',
+      'onboarding.title1': 'Traccia Game e Match',
+      'onboarding.body1':
+          'Salva game singoli e match completi con timeline ordinata.',
+      'onboarding.title2': 'Salva Deck, Opponent e Format',
+      'onboarding.body2':
+          'Memorizza deck, opponent deck, format e tag nei dettagli match.',
+      'onboarding.title3': 'Consulta Statistiche e Utility',
+      'onboarding.body3':
+          'Apri cronologia matchup, statistiche, note e strumenti in ogni momento.',
+      'info.matchHistory.title': 'Cronologia Match',
+      'info.matchHistory.body':
+          'Qui trovi i match salvati raggruppati con i dettagli dei game.',
+      'info.statistics.title': 'Statistiche',
+      'info.statistics.body':
+          'Le statistiche sono calcolate sui risultati finali dei match.',
+      'info.sideboardGuide.title': 'Guida Sideboard',
+      'info.sideboardGuide.body':
+          'Apri i piani side-in e side-out del deck selezionato.',
+      'info.opponentDeck.title': 'Deck Avversario',
+      'info.opponentDeck.body':
+          'Seleziona un deck esistente o creane uno al volo dal menu.',
+      'customize.title': 'Personalizza App',
+      'customize.players': 'Giocatori',
+      'customize.player1Name': 'Nome Player 1',
+      'customize.player2Name': 'Nome Player 2',
+      'customize.startup': 'Avvio',
+      'customize.openWith': 'Apri app con',
+      'customize.language': 'Lingua',
+      'customize.languageSystem': 'Default sistema',
+      'customize.languageEnglish': 'English',
+      'customize.languageItalian': 'Italiano',
+      'customize.colors': 'Colori',
+      'customize.bgStart': 'Sfondo iniziale',
+      'customize.bgEnd': 'Sfondo finale',
+      'customize.buttonColor': 'Colore pulsanti',
+      'customize.lpBg': 'Sfondo Life Points',
+      'customize.preview': 'Anteprima',
+      'customize.button': 'Pulsante',
+      'labels.player1': 'Player 1',
+      'labels.player2': 'Player 2',
+      'history.title': 'Cronologia Partite',
+      'history.empty': 'Nessuna partita salvata.\nInizia un game o creane uno.',
+      'history.sortFilter': 'Ordina/filtra',
+      'history.byDate': 'Per data',
+      'history.byName': 'Per nome',
+      'history.byTag': 'Per tag',
+      'history.allTags': 'Tutti i tag',
+      'history.noMatchesForTag': 'Nessun match per "{tag}".',
+      'history.importTxt': 'Importa .txt',
+      'history.exportTxt': 'Esporta .txt',
+      'history.addMatch': 'Aggiungi match',
+      'history.addGame': 'Aggiungi game',
+      'statistics.title': 'Statistiche',
+      'statistics.empty': 'Nessun dato match per questo deck.',
+      'statistics.vs': 'vs {deck}',
+      'statistics.matches': 'Match: {count}',
+      'statistics.wins': 'Vittorie: {count}',
+      'statistics.losses': 'Sconfitte: {count}',
+      'statistics.draws': 'Pareggi: {count}',
+      'statistics.winrate': 'Winrate: {value}%',
+      'statistics.lossRate': 'Loss rate: {value}%',
+      'section.userNotes': 'User Notes',
+      'section.matchupHistory': 'Matchup History',
+      'section.statistics': 'Statistics',
+      'section.sideboardPlans': 'Sideboard Plans',
+      'section.chooseSection': 'Scegli una sezione',
+      'field.opponent': 'Avversario',
+      'field.deck': 'Deck',
+      'field.opponentDeck': 'Deck Avversario',
+      'field.format': 'Format',
+      'field.tag': 'Tag',
+      'field.gamesCount': '{count} game',
+    },
+  };
+
+  String t(
+    String key, {
+    Map<String, Object?> params = const <String, Object?>{},
+  }) {
+    final String language = languageCode.toLowerCase().startsWith('it')
+        ? 'it'
+        : 'en';
+    final String fallback = _catalog['en']?[key] ?? key;
+    String value = _catalog[language]?[key] ?? fallback;
+    if (params.isEmpty) {
+      return value;
+    }
+    params.forEach((String name, Object? raw) {
+      value = value.replaceAll('{$name}', '${raw ?? ''}');
+    });
+    return value;
+  }
+}
+
+class AppTextScope extends InheritedWidget {
+  const AppTextScope({super.key, required this.strings, required super.child});
+
+  final AppStrings strings;
+
+  static AppStrings of(BuildContext context) {
+    final AppTextScope? scope = context
+        .dependOnInheritedWidgetOfExactType<AppTextScope>();
+    return scope?.strings ?? const AppStrings('en');
+  }
+
+  @override
+  bool updateShouldNotify(AppTextScope oldWidget) {
+    return oldWidget.strings.languageCode != strings.languageCode;
+  }
+}
+
+extension AppTextX on BuildContext {
+  AppStrings get txt => AppTextScope.of(this);
+}
+
+Future<void> showInfoTipOnce({
+  required BuildContext context,
+  required String tipId,
+  required String titleKey,
+  required String bodyKey,
+  IconData icon = Icons.info_outline_rounded,
+}) async {
+  final bool alreadySeen = await AppUxStateStore.hasSeenInfoTip(tipId);
+  if (alreadySeen || !context.mounted) {
+    return;
+  }
+  final AppStrings txt = context.txt;
+  await showDialog<void>(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Row(
+          children: [
+            Icon(icon, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(txt.t(titleKey))),
+          ],
+        ),
+        content: Text(txt.t(bodyKey)),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(txt.t('common.gotIt')),
+          ),
+        ],
+      );
+    },
+  );
+  await AppUxStateStore.markInfoTipSeen(tipId);
+}
 
 String _normalizeTcgKey(String? raw, {String fallback = 'yugioh'}) {
   final String normalized = (raw ?? '').trim().toLowerCase();
@@ -31,35 +431,59 @@ Future<void> main() async {
   runApp(const YugiLifeCounterApp());
 }
 
-class YugiLifeCounterApp extends StatelessWidget {
+class YugiLifeCounterApp extends StatefulWidget {
   const YugiLifeCounterApp({super.key});
 
   @override
+  State<YugiLifeCounterApp> createState() => _YugiLifeCounterAppState();
+}
+
+class _YugiLifeCounterAppState extends State<YugiLifeCounterApp> {
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'TCG Life Counter',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFE53935),
-          brightness: Brightness.dark,
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(foregroundColor: Colors.white),
-        ),
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(foregroundColor: Colors.white),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(foregroundColor: Colors.white),
-        ),
-      ),
-      home: const HomeScreen(),
+    return ValueListenableBuilder<AppLanguage>(
+      valueListenable: AppRuntimeConfig.language,
+      builder: (BuildContext context, AppLanguage language, Widget? _) {
+        final String localeCode = language.localeCode;
+        return MaterialApp(
+          title: const AppStrings('en').t('app.title'),
+          debugShowCheckedModeBanner: false,
+          locale: language.materialLocale,
+          supportedLocales: const <Locale>[Locale('en'), Locale('it')],
+          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: ThemeData(
+            useMaterial3: true,
+            brightness: Brightness.dark,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFFE53935),
+              brightness: Brightness.dark,
+            ),
+            filledButtonTheme: FilledButtonThemeData(
+              style: FilledButton.styleFrom(foregroundColor: Colors.white),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+            ),
+            outlinedButtonTheme: OutlinedButtonThemeData(
+              style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+            ),
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(foregroundColor: Colors.white),
+            ),
+          ),
+          builder: (BuildContext context, Widget? child) {
+            return AppTextScope(
+              strings: AppStrings(localeCode),
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
+          home: const HomeScreen(),
+        );
+      },
     );
   }
 }
@@ -70,6 +494,7 @@ class AppSettings {
     required this.playerOneName,
     required this.playerTwoName,
     required this.startupTcgKey,
+    required this.appLanguageKey,
     required this.backgroundStartColor,
     required this.backgroundEndColor,
     required this.buttonColor,
@@ -81,6 +506,7 @@ class AppSettings {
       playerOneName: 'Player 1',
       playerTwoName: 'Player 2',
       startupTcgKey: 'yugioh',
+      appLanguageKey: 'system',
       backgroundStartColor: Color(0xFF141414),
       backgroundEndColor: Color(0xFF341212),
       buttonColor: Color(0xFF2B2424),
@@ -91,6 +517,7 @@ class AppSettings {
   final String playerOneName;
   final String playerTwoName;
   final String startupTcgKey;
+  final String appLanguageKey;
   final Color backgroundStartColor;
   final Color backgroundEndColor;
   final Color buttonColor;
@@ -100,6 +527,7 @@ class AppSettings {
     String? playerOneName,
     String? playerTwoName,
     String? startupTcgKey,
+    String? appLanguageKey,
     Color? backgroundStartColor,
     Color? backgroundEndColor,
     Color? buttonColor,
@@ -109,6 +537,7 @@ class AppSettings {
       playerOneName: playerOneName ?? this.playerOneName,
       playerTwoName: playerTwoName ?? this.playerTwoName,
       startupTcgKey: startupTcgKey ?? this.startupTcgKey,
+      appLanguageKey: appLanguageKey ?? this.appLanguageKey,
       backgroundStartColor: backgroundStartColor ?? this.backgroundStartColor,
       backgroundEndColor: backgroundEndColor ?? this.backgroundEndColor,
       buttonColor: buttonColor ?? this.buttonColor,
@@ -122,6 +551,7 @@ class AppSettings {
       'playerOneName': playerOneName,
       'playerTwoName': playerTwoName,
       'startupTcgKey': startupTcgKey,
+      'appLanguageKey': appLanguageKey,
       'backgroundStartColor': backgroundStartColor.toARGB32(),
       'backgroundEndColor': backgroundEndColor.toARGB32(),
       'buttonColor': buttonColor.toARGB32(),
@@ -170,6 +600,9 @@ class AppSettings {
       playerOneName: parseName('playerOneName', fallback.playerOneName),
       playerTwoName: parseName('playerTwoName', fallback.playerTwoName),
       startupTcgKey: parseTcgKey('startupTcgKey', fallback.startupTcgKey),
+      appLanguageKey: AppLanguageX.fromStorageKey(
+        json['appLanguageKey'] as String?,
+      ).storageKey,
       backgroundStartColor: parseColor(
         'backgroundStartColor',
         fallback.backgroundStartColor,
@@ -943,8 +1376,19 @@ extension SupportedTcgX on SupportedTcg {
 
 enum DuelRuleSet { yugioh, mtg }
 
-String _formatDateTime(DateTime date) {
+String _formatDateTime(DateTime date, [BuildContext? context]) {
   final DateTime local = date.toLocal();
+  if (context != null) {
+    final MaterialLocalizations localizations = MaterialLocalizations.of(
+      context,
+    );
+    final String datePart = localizations.formatCompactDate(local);
+    final String timePart = localizations.formatTimeOfDay(
+      TimeOfDay.fromDateTime(local),
+      alwaysUse24HourFormat: true,
+    );
+    return '$datePart $timePart';
+  }
   String twoDigits(int value) => value.toString().padLeft(2, '0');
   return '${twoDigits(local.day)}/${twoDigits(local.month)}/${local.year} ${twoDigits(local.hour)}:${twoDigits(local.minute)}';
 }
@@ -1099,6 +1543,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const String _lastDeckByTcgKey = 'last_selected_deck_by_tcg_v1';
 
   bool _isLoading = true;
+  bool _onboardingCompleted = true;
   bool _premiumUnlocked = false;
   AppSettings _settings = AppSettings.defaults();
   List<GameRecord> _gameRecords = <GameRecord>[];
@@ -1164,7 +1609,10 @@ class _HomeScreenState extends State<HomeScreen> {
     required SupportedTcg tcg,
     required int number,
   }) {
-    final String prefix = tcg == SupportedTcg.mtg ? 'MTG Match' : 'Match';
+    final AppStrings txt = context.txt;
+    final String prefix = tcg == SupportedTcg.mtg
+        ? txt.t('tcg.mtg') + ' Match'
+        : 'Match';
     return '$prefix $number';
   }
 
@@ -1300,6 +1748,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadStoredData() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final bool premiumUnlocked = prefs.getBool(_premiumKey) ?? false;
+    final bool onboardingCompleted =
+        prefs.getBool(_onboardingCompletedKey) ?? false;
     final AppSettings settings = _decodeSettings(prefs.getString(_settingsKey));
     final List<GameRecord> records = _decodeRecords(
       prefs.getString(_recordsKey),
@@ -1319,6 +1769,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       _premiumUnlocked = premiumUnlocked;
+      _onboardingCompleted = onboardingCompleted;
       _settings = settings;
       _selectedGame = SupportedTcgX.fromStorageKey(settings.startupTcgKey);
       _gameRecords = records;
@@ -1326,6 +1777,9 @@ class _HomeScreenState extends State<HomeScreen> {
       _lastDeckByTcg = lastDeckByTcg;
       _isLoading = false;
     });
+    AppRuntimeConfig.language.value = AppLanguageX.fromStorageKey(
+      settings.appLanguageKey,
+    );
   }
 
   AppSettings _decodeSettings(String? rawSettings) {
@@ -1417,27 +1871,38 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setString(_lastDeckByTcgKey, jsonEncode(_lastDeckByTcg));
   }
 
+  Future<void> _completeOnboarding() async {
+    setState(() {
+      _onboardingCompleted = true;
+    });
+    await AppUxStateStore.setOnboardingCompleted(true);
+  }
+
   Future<bool> _ensurePremiumAccess({required String featureName}) async {
     if (_premiumUnlocked) {
       return true;
     }
+    final AppStrings txt = context.txt;
 
     final bool? unlocked = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Upgrade to Pro'),
+          title: Text(txt.t('home.upgradeProTitle')),
           content: Text(
-            '$featureName is available only in Pro.\n\nAdd your real price later in App Store. For now you can test it with a demo unlock.',
+            txt.t(
+              'home.upgradeProBody',
+              params: <String, Object?>{'feature': featureName},
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Not now'),
+              child: Text(txt.t('common.notNow')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Buy Pro (demo)'),
+              child: Text(txt.t('home.buyProDemo')),
             ),
           ],
         );
@@ -1456,6 +1921,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _startDuel() async {
+    final AppStrings txt = context.txt;
     late final Widget duelScreen;
     String duelTitlePrefix = 'Duel';
     final String selectedTcgKey = _selectedTcgKey;
@@ -1730,7 +2196,13 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Saved ${newRecords.length} game(s) to Game History ($savedCount)',
+            txt.t(
+              'home.savedGamesToast',
+              params: <String, Object?>{
+                'count': newRecords.length,
+                'total': savedCount,
+              },
+            ),
           ),
           duration: const Duration(seconds: 2),
         ),
@@ -1739,8 +2211,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openGameHistory() async {
+    final AppStrings txt = context.txt;
     final bool allowed = await _ensurePremiumAccess(
-      featureName: 'Game History',
+      featureName: txt.t('home.gameHistory'),
     );
     if (!allowed || !mounted) {
       return;
@@ -1772,8 +2245,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openCustomize() async {
+    final AppStrings txt = context.txt;
     final bool allowed = await _ensurePremiumAccess(
-      featureName: 'App customization',
+      featureName: txt.t('home.customizeApp'),
     );
     if (!allowed || !mounted) {
       return;
@@ -1796,12 +2270,16 @@ class _HomeScreenState extends State<HomeScreen> {
         updatedSettings.startupTcgKey,
       );
     });
+    AppRuntimeConfig.language.value = AppLanguageX.fromStorageKey(
+      updatedSettings.appLanguageKey,
+    );
     await _persistState();
   }
 
   Future<void> _openSideboardBook() async {
+    final AppStrings txt = context.txt;
     final bool allowed = await _ensurePremiumAccess(
-      featureName: "Deck's Utility",
+      featureName: txt.t('home.decksUtility'),
     );
     if (!allowed || !mounted) {
       return;
@@ -1836,6 +2314,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppStrings txt = context.txt;
     final AppSettings activeSettings = _settings;
     final int savedMatchesForGame = _recordsForSelectedGame().length;
 
@@ -1854,16 +2333,18 @@ class _HomeScreenState extends State<HomeScreen> {
         child: SafeArea(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
+              : !_onboardingCompleted
+              ? _AppOnboardingScreen(onCompleted: _completeOnboarding)
               : Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Spacer(),
-                      const Text(
-                        'TCG Life Counter',
+                      Text(
+                        txt.t('app.title'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 36,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.8,
@@ -1903,7 +2384,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   (SupportedTcg game) =>
                                       DropdownMenuItem<SupportedTcg>(
                                         value: game,
-                                        child: Text(game.label),
+                                        child: Text(
+                                          txt.t('tcg.${game.storageKey}'),
+                                        ),
                                       ),
                                 )
                                 .toList(growable: false),
@@ -1923,18 +2406,28 @@ class _HomeScreenState extends State<HomeScreen> {
                         const Spacer(),
                         _ModeButton(
                           icon: Icons.splitscreen,
-                          title: "Let's Duel",
-                          subtitle: 'Top and bottom players',
+                          title: txt.t('home.letsDuel'),
+                          subtitle: txt.t('home.topBottomPlayers'),
                           backgroundColor: activeSettings.buttonColor,
                           onPressed: _startDuel,
                         ),
                         const SizedBox(height: 12),
                         _ModeButton(
                           icon: Icons.history_rounded,
-                          title: 'Game History',
+                          title: txt.t('home.gameHistory'),
                           subtitle: _premiumUnlocked
-                              ? '$savedMatchesForGame saved matches'
-                              : 'Premium feature • $savedMatchesForGame saved',
+                              ? txt.t(
+                                  'home.savedMatches',
+                                  params: <String, Object?>{
+                                    'count': savedMatchesForGame,
+                                  },
+                                )
+                              : txt.t(
+                                  'home.premiumSaved',
+                                  params: <String, Object?>{
+                                    'count': savedMatchesForGame,
+                                  },
+                                ),
                           backgroundColor: activeSettings.buttonColor,
                           onPressed: _openGameHistory,
                           locked: !_premiumUnlocked,
@@ -1942,10 +2435,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 12),
                         _ModeButton(
                           icon: Icons.menu_book_rounded,
-                          title: "Deck's Utility",
+                          title: txt.t('home.decksUtility'),
                           subtitle: _premiumUnlocked
-                              ? 'Decks, Sideboard and Plans'
-                              : 'Premium feature',
+                              ? txt.t('home.decksUtilitySubtitle')
+                              : txt.t('common.premium'),
                           backgroundColor: activeSettings.buttonColor,
                           onPressed: _openSideboardBook,
                           locked: !_premiumUnlocked,
@@ -1953,10 +2446,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 12),
                         _ModeButton(
                           icon: Icons.tune_rounded,
-                          title: 'Customize App',
+                          title: txt.t('home.customizeApp'),
                           subtitle: _premiumUnlocked
-                              ? 'Names and colors'
-                              : 'Premium feature',
+                              ? txt.t('home.namesAndColors')
+                              : txt.t('common.premium'),
                           backgroundColor: activeSettings.buttonColor,
                           onPressed: _openCustomize,
                           locked: !_premiumUnlocked,
@@ -1973,10 +2466,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: Colors.white.withValues(alpha: 0.2),
                             ),
                           ),
-                          child: const Text(
-                            "Coming soon! Contact me if you're interested.",
+                          child: Text(
+                            txt.t('home.comingSoon'),
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
                             ),
@@ -1988,6 +2481,151 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
         ),
+      ),
+    );
+  }
+}
+
+class _AppOnboardingScreen extends StatefulWidget {
+  const _AppOnboardingScreen({required this.onCompleted});
+
+  final Future<void> Function() onCompleted;
+
+  @override
+  State<_AppOnboardingScreen> createState() => _AppOnboardingScreenState();
+}
+
+class _AppOnboardingScreenState extends State<_AppOnboardingScreen> {
+  final PageController _pageController = PageController();
+  int _index = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _finish() async {
+    await widget.onCompleted();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppStrings txt = context.txt;
+    final List<({IconData icon, String title, String body})> pages =
+        <({IconData icon, String title, String body})>[
+          (
+            icon: Icons.history_rounded,
+            title: txt.t('onboarding.title1'),
+            body: txt.t('onboarding.body1'),
+          ),
+          (
+            icon: Icons.style_rounded,
+            title: txt.t('onboarding.title2'),
+            body: txt.t('onboarding.body2'),
+          ),
+          (
+            icon: Icons.query_stats_rounded,
+            title: txt.t('onboarding.title3'),
+            body: txt.t('onboarding.body3'),
+          ),
+        ];
+    final bool isLast = _index == pages.length - 1;
+
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _finish,
+              child: Text(txt.t('common.skip')),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: pages.length,
+              onPageChanged: (int value) {
+                setState(() {
+                  _index = value;
+                });
+              },
+              itemBuilder: (BuildContext context, int index) {
+                final page = pages[index];
+                return Card(
+                  color: const Color(0xFF1E1B1B),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(22),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(page.icon, size: 52),
+                        const SizedBox(height: 18),
+                        Text(
+                          page.title,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          page.body,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.84),
+                            height: 1.35,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List<Widget>.generate(pages.length, (int i) {
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                height: 8,
+                width: _index == i ? 22 : 8,
+                decoration: BoxDecoration(
+                  color: _index == i
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 14),
+          FilledButton(
+            onPressed: () async {
+              if (isLast) {
+                await _finish();
+                return;
+              }
+              await _pageController.nextPage(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+              );
+            },
+            child: Text(txt.t(isLast ? 'common.continue' : 'common.next')),
+          ),
+        ],
       ),
     );
   }
@@ -3333,6 +3971,13 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     if (deck == null) {
       return;
     }
+    await showInfoTipOnce(
+      context: context,
+      tipId: InfoTipIds.sideboardGuide,
+      titleKey: 'info.sideboardGuide.title',
+      bodyKey: 'info.sideboardGuide.body',
+      icon: Icons.menu_book_rounded,
+    );
 
     await showDialog<void>(
       context: context,
@@ -4272,6 +4917,13 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
   }
 
   Future<void> _openMatchDetailsEditor() async {
+    await showInfoTipOnce(
+      context: context,
+      tipId: InfoTipIds.opponentDeckSelection,
+      titleKey: 'info.opponentDeck.title',
+      bodyKey: 'info.opponentDeck.body',
+      icon: Icons.arrow_drop_down_circle_outlined,
+    );
     final TextEditingController matchNameController = TextEditingController(
       text: _matchName,
     );
@@ -6740,6 +7392,13 @@ class _DuelScreenState extends State<DuelScreen> {
     if (deck == null) {
       return;
     }
+    await showInfoTipOnce(
+      context: context,
+      tipId: InfoTipIds.sideboardGuide,
+      titleKey: 'info.sideboardGuide.title',
+      bodyKey: 'info.sideboardGuide.body',
+      icon: Icons.menu_book_rounded,
+    );
 
     await showDialog<void>(
       context: context,
@@ -7858,6 +8517,13 @@ class _DuelScreenState extends State<DuelScreen> {
   }
 
   Future<void> _openMatchDetailsEditor() async {
+    await showInfoTipOnce(
+      context: context,
+      tipId: InfoTipIds.opponentDeckSelection,
+      titleKey: 'info.opponentDeck.title',
+      bodyKey: 'info.opponentDeck.body',
+      icon: Icons.arrow_drop_down_circle_outlined,
+    );
     final TextEditingController matchNameController = TextEditingController(
       text: _matchName,
     );
@@ -9328,6 +9994,20 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     _records.sort((GameRecord a, GameRecord b) {
       return b.createdAt.compareTo(a.createdAt);
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(
+        showInfoTipOnce(
+          context: context,
+          tipId: InfoTipIds.matchHistory,
+          titleKey: 'info.matchHistory.title',
+          bodyKey: 'info.matchHistory.body',
+          icon: Icons.history_rounded,
+        ),
+      );
+    });
   }
 
   void _closeWithResult() {
@@ -10179,6 +10859,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   }
 
   Widget _buildTwoPlayerMatchList() {
+    final AppStrings txt = context.txt;
     final List<MatchRecord> allMatches = _twoPlayerMatchRecords();
     final List<String> availableTags = _availableMatchTags(allMatches);
     if (_selectedMatchTagFilter.isNotEmpty &&
@@ -10193,8 +10874,11 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
         child: Text(
           _matchHistorySortMode == MatchHistorySortMode.tag &&
                   _selectedMatchTagFilter.isNotEmpty
-              ? 'No matches for "$_selectedMatchTagFilter".'
-              : 'No matches tracked yet.\nStart a game or create one manually.',
+              ? txt.t(
+                  'history.noMatchesForTag',
+                  params: <String, Object?>{'tag': _selectedMatchTagFilter},
+                )
+              : txt.t('history.empty'),
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.white.withValues(alpha: 0.74)),
         ),
@@ -10210,23 +10894,23 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
               Expanded(
                 child: DropdownButtonFormField<MatchHistorySortMode>(
                   initialValue: _matchHistorySortMode,
-                  decoration: const InputDecoration(
-                    labelText: 'Sort/filter',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: txt.t('history.sortFilter'),
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
-                  items: const <DropdownMenuItem<MatchHistorySortMode>>[
+                  items: <DropdownMenuItem<MatchHistorySortMode>>[
                     DropdownMenuItem<MatchHistorySortMode>(
                       value: MatchHistorySortMode.date,
-                      child: Text('By date'),
+                      child: Text(txt.t('history.byDate')),
                     ),
                     DropdownMenuItem<MatchHistorySortMode>(
                       value: MatchHistorySortMode.name,
-                      child: Text('By name'),
+                      child: Text(txt.t('history.byName')),
                     ),
                     DropdownMenuItem<MatchHistorySortMode>(
                       value: MatchHistorySortMode.tag,
-                      child: Text('By tag'),
+                      child: Text(txt.t('history.byTag')),
                     ),
                   ],
                   onChanged: (MatchHistorySortMode? mode) {
@@ -10246,15 +10930,15 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                     initialValue: _selectedMatchTagFilter.isEmpty
                         ? null
                         : _selectedMatchTagFilter,
-                    decoration: const InputDecoration(
-                      labelText: 'Tag',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: txt.t('field.tag'),
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                     items: <DropdownMenuItem<String>>[
-                      const DropdownMenuItem<String>(
+                      DropdownMenuItem<String>(
                         value: '',
-                        child: Text('All tags'),
+                        child: Text(txt.t('history.allTags')),
                       ),
                       ...availableTags.map((String tag) {
                         return DropdownMenuItem<String>(
@@ -10326,7 +11010,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          _formatDateTime(match.createdAt),
+                          _formatDateTime(match.createdAt, context),
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 12,
@@ -10334,7 +11018,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Opponent: $opponentLabel',
+                          '${txt.t('field.opponent')}: $opponentLabel',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -10344,7 +11028,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Deck: $deckLabel',
+                          '${txt.t('field.deck')}: $deckLabel',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -10353,7 +11037,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Opponent Deck: $opponentDeckLabel',
+                          '${txt.t('field.opponentDeck')}: $opponentDeckLabel',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -10362,7 +11046,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Format: $formatLabel',
+                          '${txt.t('field.format')}: $formatLabel',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -10371,7 +11055,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Tag: $tagLabel',
+                          '${txt.t('field.tag')}: $tagLabel',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -10380,7 +11064,12 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '${match.games.length} game${match.games.length == 1 ? '' : 's'}',
+                          txt.t(
+                            'field.gamesCount',
+                            params: <String, Object?>{
+                              'count': match.games.length,
+                            },
+                          ),
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.72),
                             fontSize: 12,
@@ -10401,6 +11090,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppStrings txt = context.txt;
     final bool twoPlayerOnly = _isTwoPlayerHistoryOnly;
     return PopScope(
       canPop: false,
@@ -10412,24 +11102,26 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Game History'),
+          title: Text(txt.t('history.title')),
           leading: IconButton(
             onPressed: _closeWithResult,
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
           ),
           actions: [
             IconButton(
-              tooltip: 'Import .txt',
+              tooltip: txt.t('history.importTxt'),
               onPressed: _importHistoryTxt,
               icon: const Icon(Icons.upload_file_rounded),
             ),
             IconButton(
-              tooltip: 'Export .txt',
+              tooltip: txt.t('history.exportTxt'),
               onPressed: _exportHistoryTxt,
               icon: const Icon(Icons.download_rounded),
             ),
             IconButton(
-              tooltip: twoPlayerOnly ? 'Add match' : 'Add game',
+              tooltip: twoPlayerOnly
+                  ? txt.t('history.addMatch')
+                  : txt.t('history.addGame'),
               onPressed: _createManualRecord,
               icon: const Icon(Icons.add_rounded),
             ),
@@ -10438,7 +11130,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
         body: _records.isEmpty
             ? Center(
                 child: Text(
-                  'No games tracked yet.\nStart a game or create one manually.',
+                  txt.t('history.empty'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white.withValues(alpha: 0.74)),
                 ),
@@ -10909,6 +11601,13 @@ class _TwoPlayerMatchDetailScreenState
   }
 
   Future<void> _editMatchMetadata() async {
+    await showInfoTipOnce(
+      context: context,
+      tipId: InfoTipIds.opponentDeckSelection,
+      titleKey: 'info.opponentDeck.title',
+      bodyKey: 'info.opponentDeck.body',
+      icon: Icons.arrow_drop_down_circle_outlined,
+    );
     final TextEditingController matchNameController = TextEditingController(
       text: _effectiveMatchName(),
     );
@@ -12318,20 +13017,19 @@ class _SideboardMatchupListScreenState
   }
 
   Future<void> _openSideboardPlans() async {
-    final List<SideboardMatchup>? updated = await Navigator.of(context).push<
-      List<SideboardMatchup>
-    >(
-      MaterialPageRoute<List<SideboardMatchup>>(
-        builder: (_) => _DeckMatchupHistoryScreen(
-          deck: widget.deck.copyWith(
-            matchups: _matchups,
-            userNotes: _userNotes,
+    final List<SideboardMatchup>? updated = await Navigator.of(context)
+        .push<List<SideboardMatchup>>(
+          MaterialPageRoute<List<SideboardMatchup>>(
+            builder: (_) => _DeckMatchupHistoryScreen(
+              deck: widget.deck.copyWith(
+                matchups: _matchups,
+                userNotes: _userNotes,
+              ),
+              records: _records,
+              mode: _DeckSectionMode.sideboardPlans,
+            ),
           ),
-          records: _records,
-          mode: _DeckSectionMode.sideboardPlans,
-        ),
-      ),
-    );
+        );
     if (updated == null) {
       return;
     }
@@ -12847,7 +13545,8 @@ class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
   Widget build(BuildContext context) {
     final List<SideboardMatchup> sortedMatchups = _sortedMatchups();
     final List<MatchRecord> linkedMatches = _linkedMatchRecords();
-    final bool showSideboardPlans = widget.mode == _DeckSectionMode.sideboardPlans;
+    final bool showSideboardPlans =
+        widget.mode == _DeckSectionMode.sideboardPlans;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) {
@@ -12858,7 +13557,9 @@ class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(showSideboardPlans ? 'Sideboard Plans' : 'Matchup History'),
+          title: Text(
+            showSideboardPlans ? 'Sideboard Plans' : 'Matchup History',
+          ),
           leading: IconButton(
             onPressed: _closeWithResult,
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
@@ -12993,7 +13694,9 @@ class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: _matchResultBackgroundColor(resultLabel),
+                                  color: _matchResultBackgroundColor(
+                                    resultLabel,
+                                  ),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
@@ -13189,6 +13892,20 @@ class _DeckStatisticsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) {
+        return;
+      }
+      unawaited(
+        showInfoTipOnce(
+          context: context,
+          tipId: InfoTipIds.statistics,
+          titleKey: 'info.statistics.title',
+          bodyKey: 'info.statistics.body',
+          icon: Icons.query_stats_rounded,
+        ),
+      );
+    });
     final List<_DeckStatisticsRow> rows = _statsRows();
     return Scaffold(
       appBar: AppBar(title: const Text('Statistics')),
@@ -13587,6 +14304,7 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
   late Color _buttonColor;
   late Color _lifePointsBackgroundColor;
   late SupportedTcg _startupTcg;
+  late AppLanguage _appLanguage;
 
   @override
   void initState() {
@@ -13605,6 +14323,9 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
     _startupTcg = SupportedTcgX.fromStorageKey(
       widget.initialSettings.startupTcgKey,
     );
+    _appLanguage = AppLanguageX.fromStorageKey(
+      widget.initialSettings.appLanguageKey,
+    );
     _customizeScrollController = ScrollController();
   }
 
@@ -13617,17 +14338,19 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
   }
 
   AppSettings _buildSettings() {
+    final AppStrings txt = context.txt;
     final String playerOneName = _playerOneController.text.trim().isEmpty
-        ? 'Player 1'
+        ? txt.t('labels.player1')
         : _playerOneController.text.trim();
     final String playerTwoName = _playerTwoController.text.trim().isEmpty
-        ? 'Player 2'
+        ? txt.t('labels.player2')
         : _playerTwoController.text.trim();
 
     return widget.initialSettings.copyWith(
       playerOneName: playerOneName,
       playerTwoName: playerTwoName,
       startupTcgKey: _startupTcg.storageKey,
+      appLanguageKey: _appLanguage.storageKey,
       backgroundStartColor: _backgroundStartColor,
       backgroundEndColor: _backgroundEndColor,
       buttonColor: _buttonColor,
@@ -13686,6 +14409,7 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppStrings txt = context.txt;
     final Color previewMiddle =
         Color.lerp(_backgroundStartColor, _backgroundEndColor, 0.45) ??
         _backgroundStartColor;
@@ -13699,9 +14423,12 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Customize App'),
+        title: Text(txt.t('customize.title')),
         actions: [
-          FilledButton(onPressed: _saveSettings, child: const Text('Save')),
+          FilledButton(
+            onPressed: _saveSettings,
+            child: Text(txt.t('common.save')),
+          ),
           const SizedBox(width: 12),
         ],
       ),
@@ -13714,43 +14441,43 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: contentPadding,
           children: [
-            const Text(
-              'Players',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            Text(
+              txt.t('customize.players'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _playerOneController,
-              decoration: const InputDecoration(
-                labelText: 'Player 1 name',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: txt.t('customize.player1Name'),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _playerTwoController,
-              decoration: const InputDecoration(
-                labelText: 'Player 2 name',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: txt.t('customize.player2Name'),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Startup',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            Text(
+              txt.t('customize.startup'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<SupportedTcg>(
               initialValue: _startupTcg,
-              decoration: const InputDecoration(
-                labelText: 'Open app with',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: txt.t('customize.openWith'),
+                border: const OutlineInputBorder(),
               ),
               items: _supportedTcgAlphabeticalOrder
                   .map(
                     (SupportedTcg game) => DropdownMenuItem<SupportedTcg>(
                       value: game,
-                      child: Text(game.label),
+                      child: Text(txt.t('tcg.${game.storageKey}')),
                     ),
                   )
                   .toList(growable: false),
@@ -13763,14 +14490,44 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
                 });
               },
             ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<AppLanguage>(
+              initialValue: _appLanguage,
+              decoration: InputDecoration(
+                labelText: txt.t('customize.language'),
+                border: const OutlineInputBorder(),
+              ),
+              items: <DropdownMenuItem<AppLanguage>>[
+                DropdownMenuItem<AppLanguage>(
+                  value: AppLanguage.system,
+                  child: Text(txt.t('customize.languageSystem')),
+                ),
+                DropdownMenuItem<AppLanguage>(
+                  value: AppLanguage.english,
+                  child: Text(txt.t('customize.languageEnglish')),
+                ),
+                DropdownMenuItem<AppLanguage>(
+                  value: AppLanguage.italian,
+                  child: Text(txt.t('customize.languageItalian')),
+                ),
+              ],
+              onChanged: (AppLanguage? value) {
+                if (value == null || value == _appLanguage) {
+                  return;
+                }
+                setState(() {
+                  _appLanguage = value;
+                });
+              },
+            ),
             const SizedBox(height: 20),
-            const Text(
-              'Colors',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            Text(
+              txt.t('customize.colors'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
             _buildColorPicker(
-              label: 'Background start',
+              label: txt.t('customize.bgStart'),
               selectedColor: _backgroundStartColor,
               onChanged: (Color color) {
                 setState(() {
@@ -13780,7 +14537,7 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
             ),
             const SizedBox(height: 12),
             _buildColorPicker(
-              label: 'Background end',
+              label: txt.t('customize.bgEnd'),
               selectedColor: _backgroundEndColor,
               onChanged: (Color color) {
                 setState(() {
@@ -13790,7 +14547,7 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
             ),
             const SizedBox(height: 12),
             _buildColorPicker(
-              label: 'Button color',
+              label: txt.t('customize.buttonColor'),
               selectedColor: _buttonColor,
               onChanged: (Color color) {
                 setState(() {
@@ -13800,7 +14557,7 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
             ),
             const SizedBox(height: 12),
             _buildColorPicker(
-              label: 'Life Points background',
+              label: txt.t('customize.lpBg'),
               selectedColor: _lifePointsBackgroundColor,
               onChanged: (Color color) {
                 setState(() {
@@ -13809,9 +14566,9 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
               },
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Preview',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            Text(
+              txt.t('customize.preview'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
             Container(
@@ -13836,7 +14593,7 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          '${_playerOneController.text.trim().isEmpty ? 'Player 1' : _playerOneController.text.trim()} vs ${_playerTwoController.text.trim().isEmpty ? 'Player 2' : _playerTwoController.text.trim()}',
+                          '${_playerOneController.text.trim().isEmpty ? txt.t('labels.player1') : _playerOneController.text.trim()} vs ${_playerTwoController.text.trim().isEmpty ? txt.t('labels.player2') : _playerTwoController.text.trim()}',
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -13846,7 +14603,7 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
                         style: FilledButton.styleFrom(
                           backgroundColor: _buttonColor,
                         ),
-                        child: const Text('Button'),
+                        child: Text(txt.t('customize.button')),
                       ),
                     ],
                   ),
