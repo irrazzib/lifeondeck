@@ -340,6 +340,7 @@ class DuelResultPayload {
     required this.lifePointHistory,
     required this.gameStage,
     required this.opponentName,
+    required this.deckId,
     required this.deckName,
     required this.matchResult,
     this.shouldSave = true,
@@ -348,6 +349,7 @@ class DuelResultPayload {
   final List<String> lifePointHistory;
   final String gameStage;
   final String opponentName;
+  final String deckId;
   final String deckName;
   final String matchResult;
   final bool shouldSave;
@@ -1160,27 +1162,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    GameRecord? createdRecord;
-
-    if (_premiumUnlocked) {
-      final DateTime now = DateTime.now();
-      createdRecord = GameRecord(
-        id: now.microsecondsSinceEpoch.toString(),
-        title: '$duelTitlePrefix ${_gameRecords.length + 1}',
-        createdAt: now,
-        gameStage: 'G1',
-        notes: '',
-        lifePointHistory: const <String>[],
-        tcgKey: selectedTcgKey,
-        playerOneName: _settings.playerOneName,
-        playerTwoName: _settings.playerTwoName,
-      );
-      setState(() {
-        _gameRecords = <GameRecord>[createdRecord!, ..._gameRecords];
-      });
-      await _persistState();
-    }
-
     if (!mounted) {
       return;
     }
@@ -1197,45 +1178,53 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
 
-    if (createdRecord == null) {
-      if (duelResult != null) {
-        await _persistState();
-      }
+    if (duelResult == null) {
+      await _persistState();
       return;
     }
-    if (duelResult == null || !duelResult.shouldSave) {
-      setState(() {
-        _gameRecords = _gameRecords
-            .where((GameRecord record) => record.id != createdRecord!.id)
-            .toList(growable: false);
-      });
+    if (!duelResult.shouldSave) {
       await _persistState();
       return;
     }
 
     final String rawDeckName = latestDeckName;
-    final SideboardDeck? selectedDeck = _findDeckByNameForSelectedGame(
-      rawDeckName,
-    );
-    final String resolvedDeckId = selectedDeck?.id ?? '';
+    final String payloadDeckId = duelResult.deckId.trim();
+    SideboardDeck? selectedDeck;
+    if (payloadDeckId.isNotEmpty) {
+      for (final SideboardDeck deck in availableDecks) {
+        if (deck.id == payloadDeckId) {
+          selectedDeck = deck;
+          break;
+        }
+      }
+    }
+    selectedDeck ??= _findDeckByNameForSelectedGame(rawDeckName);
+    final String resolvedDeckId = selectedDeck?.id ?? payloadDeckId;
     final String resolvedDeckName = selectedDeck?.name ?? rawDeckName;
+    final String resolvedOpponentName = duelResult.opponentName.trim();
+    final DateTime now = DateTime.now();
+    final GameRecord createdRecord = GameRecord(
+      id: now.microsecondsSinceEpoch.toString(),
+      title: '$duelTitlePrefix ${_gameRecords.length + 1}',
+      createdAt: now,
+      gameStage: duelResult.gameStage.trim().isEmpty
+          ? 'G1'
+          : duelResult.gameStage,
+      notes: '',
+      lifePointHistory: List<String>.from(duelResult.lifePointHistory),
+      tcgKey: selectedTcgKey,
+      deckId: resolvedDeckId,
+      deckName: resolvedDeckName,
+      matchResult: duelResult.matchResult,
+      opponentName: resolvedOpponentName,
+      playerOneName: _settings.playerOneName,
+      playerTwoName: resolvedOpponentName.isEmpty
+          ? _settings.playerTwoName
+          : resolvedOpponentName,
+    );
 
     setState(() {
-      _gameRecords = _gameRecords
-          .map((GameRecord record) {
-            if (record.id != createdRecord!.id) {
-              return record;
-            }
-            return record.copyWith(
-              lifePointHistory: List<String>.from(duelResult.lifePointHistory),
-              gameStage: duelResult.gameStage,
-              matchResult: duelResult.matchResult,
-              opponentName: duelResult.opponentName,
-              deckId: resolvedDeckId,
-              deckName: resolvedDeckName,
-            );
-          })
-          .toList(growable: false);
+      _gameRecords = <GameRecord>[createdRecord, ..._gameRecords];
     });
     await _persistState();
   }
@@ -2653,6 +2642,9 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
   int _bo3Wins = 0;
   int _bo3Losses = 0;
   String _lastCompletedOpponentName = '';
+  String _lastRecordedGameStage = '';
+  String _lastRecordedMatchResult = '';
+  String _lastRecordedOpponentName = '';
 
   bool get _isMultiplayer => widget.playerCount >= 3;
 
@@ -2760,6 +2752,19 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       }
     }
     return null;
+  }
+
+  String _selectedDeckIdForHistory() {
+    final String normalizedDeck = _deckInUse.trim().toLowerCase();
+    if (normalizedDeck.isEmpty) {
+      return '';
+    }
+    for (final SideboardDeck deck in widget.availableDecks) {
+      if (deck.name.trim().toLowerCase() == normalizedDeck) {
+        return deck.id;
+      }
+    }
+    return '';
   }
 
   String _formatSideboardEntries(List<SideboardCardEntry> entries) {
@@ -3089,19 +3094,39 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     for (int index = 0; index < widget.playerCount; index += 1) {
       _cancelPendingTimer(index);
     }
+    final String explicitMatchResult = matchResult.trim();
+    final bool shouldUseLastRecordedSnapshot =
+        explicitMatchResult.isNotEmpty &&
+        _selectedGameStage == 'G1' &&
+        _lastRecordedGameStage.trim().isNotEmpty &&
+        _lastRecordedMatchResult.trim().isNotEmpty;
+    final String resolvedMatchResult = shouldUseLastRecordedSnapshot
+        ? _lastRecordedMatchResult.trim()
+        : (explicitMatchResult.isNotEmpty
+              ? explicitMatchResult
+              : _lastRecordedMatchResult.trim());
+    final String resolvedGameStage = shouldUseLastRecordedSnapshot
+        ? _lastRecordedGameStage.trim()
+        : (explicitMatchResult.isNotEmpty
+              ? _selectedGameStage
+              : (_lastRecordedGameStage.trim().isNotEmpty
+                    ? _lastRecordedGameStage.trim()
+                    : _selectedGameStage));
     final String trimmedOpponent = _opponentName.trim();
+    final String rememberedOpponent = _lastRecordedOpponentName.trim();
     final String opponentForHistory = trimmedOpponent.isNotEmpty
         ? trimmedOpponent
-        : (matchResult.trim().isNotEmpty && _selectedGameStage == 'G1'
-              ? _lastCompletedOpponentName.trim()
-              : '');
+        : (rememberedOpponent.isNotEmpty
+              ? rememberedOpponent
+              : _lastCompletedOpponentName.trim());
     Navigator.of(context).pop(
       DuelResultPayload(
         lifePointHistory: _historySnapshotWithPending(),
-        gameStage: _selectedGameStage,
+        gameStage: resolvedGameStage,
         opponentName: opponentForHistory,
+        deckId: _selectedDeckIdForHistory(),
         deckName: _deckInUse,
-        matchResult: matchResult,
+        matchResult: resolvedMatchResult,
         shouldSave: shouldSave,
       ),
     );
@@ -3783,12 +3808,15 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       _opponentName = opponentController.text.trim();
       if (_opponentName.isNotEmpty) {
         _lastCompletedOpponentName = _opponentName;
+        _lastRecordedOpponentName = _opponentName;
       }
       _deckInUse = selectedDeck.trim();
       _selectedGameStage = stage;
       if (widget.playerCount == 2 && stage == 'G1') {
         _bo3Wins = 0;
         _bo3Losses = 0;
+        _lastRecordedGameStage = '';
+        _lastRecordedMatchResult = '';
       }
       if (_isMultiplayer) {
         for (
@@ -3922,6 +3950,13 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
         _cancelPendingTimer(index);
       }
       setState(() {
+        final String completedOpponent = _opponentName.trim();
+        if (completedOpponent.isNotEmpty) {
+          _lastCompletedOpponentName = completedOpponent;
+          _lastRecordedOpponentName = completedOpponent;
+        }
+        _lastRecordedGameStage = _selectedGameStage;
+        _lastRecordedMatchResult = action;
         _advanceBo3AfterRestart(declaredResult: action);
         for (int index = 0; index < widget.playerCount; index += 1) {
           _lifePoints[index] = widget.initialLifePoints;
@@ -3971,6 +4006,9 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       _cancelPendingTimer(index);
     }
     setState(() {
+      _lastRecordedGameStage = '';
+      _lastRecordedMatchResult = '';
+      _lastRecordedOpponentName = '';
       _advanceBo3AfterRestart();
       for (int index = 0; index < widget.playerCount; index += 1) {
         _lifePoints[index] = widget.initialLifePoints;
@@ -5635,6 +5673,9 @@ class _DuelScreenState extends State<DuelScreen> {
   int _bo3Wins = 0;
   int _bo3Losses = 0;
   String _lastCompletedOpponentName = '';
+  String _lastRecordedGameStage = '';
+  String _lastRecordedMatchResult = '';
+  String _lastRecordedOpponentName = '';
 
   bool get _isMtgRules => widget.ruleset == DuelRuleSet.mtg;
 
@@ -5683,6 +5724,19 @@ class _DuelScreenState extends State<DuelScreen> {
       }
     }
     return null;
+  }
+
+  String _selectedDeckIdForHistory() {
+    final String normalizedDeck = _deckInUse.trim().toLowerCase();
+    if (normalizedDeck.isEmpty) {
+      return '';
+    }
+    for (final SideboardDeck deck in widget.availableDecks) {
+      if (deck.name.trim().toLowerCase() == normalizedDeck) {
+        return deck.id;
+      }
+    }
+    return '';
   }
 
   String _formatSideboardEntries(List<SideboardCardEntry> entries) {
@@ -6448,19 +6502,39 @@ class _DuelScreenState extends State<DuelScreen> {
     _diceRollTimer?.cancel();
     _cancelPendingTimer(1);
     _cancelPendingTimer(2);
+    final String explicitMatchResult = matchResult.trim();
+    final bool shouldUseLastRecordedSnapshot =
+        explicitMatchResult.isNotEmpty &&
+        _selectedGameStage == 'G1' &&
+        _lastRecordedGameStage.trim().isNotEmpty &&
+        _lastRecordedMatchResult.trim().isNotEmpty;
+    final String resolvedMatchResult = shouldUseLastRecordedSnapshot
+        ? _lastRecordedMatchResult.trim()
+        : (explicitMatchResult.isNotEmpty
+              ? explicitMatchResult
+              : _lastRecordedMatchResult.trim());
+    final String resolvedGameStage = shouldUseLastRecordedSnapshot
+        ? _lastRecordedGameStage.trim()
+        : (explicitMatchResult.isNotEmpty
+              ? _selectedGameStage
+              : (_lastRecordedGameStage.trim().isNotEmpty
+                    ? _lastRecordedGameStage.trim()
+                    : _selectedGameStage));
     final String trimmedOpponent = _opponentName.trim();
+    final String rememberedOpponent = _lastRecordedOpponentName.trim();
     final String opponentForHistory = trimmedOpponent.isNotEmpty
         ? trimmedOpponent
-        : (matchResult.trim().isNotEmpty && _selectedGameStage == 'G1'
-              ? _lastCompletedOpponentName.trim()
-              : '');
+        : (rememberedOpponent.isNotEmpty
+              ? rememberedOpponent
+              : _lastCompletedOpponentName.trim());
     Navigator.of(context).pop(
       DuelResultPayload(
         lifePointHistory: _historySnapshotWithPending(),
-        gameStage: _selectedGameStage,
+        gameStage: resolvedGameStage,
         opponentName: opponentForHistory,
+        deckId: _selectedDeckIdForHistory(),
         deckName: _deckInUse,
-        matchResult: matchResult,
+        matchResult: resolvedMatchResult,
         shouldSave: shouldSave,
       ),
     );
@@ -6835,12 +6909,15 @@ class _DuelScreenState extends State<DuelScreen> {
       _opponentName = opponentController.text.trim();
       if (_opponentName.isNotEmpty) {
         _lastCompletedOpponentName = _opponentName;
+        _lastRecordedOpponentName = _opponentName;
       }
       _deckInUse = selectedDeck.trim();
       _selectedGameStage = stage;
       if (stage == 'G1') {
         _bo3Wins = 0;
         _bo3Losses = 0;
+        _lastRecordedGameStage = '';
+        _lastRecordedMatchResult = '';
       }
     });
     opponentController.dispose();
@@ -6926,6 +7003,13 @@ class _DuelScreenState extends State<DuelScreen> {
       _cancelPendingTimer(2);
 
       setState(() {
+        final String completedOpponent = _opponentName.trim();
+        if (completedOpponent.isNotEmpty) {
+          _lastCompletedOpponentName = completedOpponent;
+          _lastRecordedOpponentName = completedOpponent;
+        }
+        _lastRecordedGameStage = _selectedGameStage;
+        _lastRecordedMatchResult = action;
         _advanceBo3AfterRestart(declaredResult: action);
         _playerOneLp = widget.initialLifePoints;
         _playerTwoLp = widget.initialLifePoints;
@@ -6961,6 +7045,9 @@ class _DuelScreenState extends State<DuelScreen> {
     _cancelPendingTimer(2);
 
     setState(() {
+      _lastRecordedGameStage = '';
+      _lastRecordedMatchResult = '';
+      _lastRecordedOpponentName = '';
       _advanceBo3AfterRestart();
       _playerOneLp = widget.initialLifePoints;
       _playerTwoLp = widget.initialLifePoints;
@@ -8121,6 +8208,9 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     _updateRecord(
       record.copyWith(
         opponentName: opponentController.text.trim(),
+        playerTwoName: opponentController.text.trim().isEmpty
+            ? record.playerTwoName
+            : opponentController.text.trim(),
         deckId: selectedDeck?.id ?? '',
         deckName: selectedDeck?.name ?? '',
         gameStage: stage,
@@ -8483,9 +8573,11 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                   final String selectedDeckId = _resolvedDeckId(record);
                   final String selectedResult = _selectedMatchResult(record);
                   final String opponentLabel =
-                      record.opponentName.trim().isEmpty
-                      ? '-'
-                      : record.opponentName.trim();
+                      record.opponentName.trim().isNotEmpty
+                      ? record.opponentName.trim()
+                      : (record.playerTwoName.trim().isNotEmpty
+                            ? record.playerTwoName.trim()
+                            : '-');
                   return Card(
                     margin: const EdgeInsets.only(bottom: 10),
                     color: const Color(0xFF1E1B1B),
@@ -9475,6 +9567,7 @@ class _SideboardMatchupListScreenState
     _updateRecord(
       record.copyWith(
         lifePointHistory: List<String>.from(duelResult.lifePointHistory),
+        deckId: widget.deck.id,
         gameStage: duelResult.gameStage.trim().isEmpty
             ? record.gameStage
             : duelResult.gameStage,
@@ -9483,17 +9576,26 @@ class _SideboardMatchupListScreenState
             : duelResult.matchResult,
         opponentName: duelResult.opponentName.trim().isEmpty
             ? record.opponentName
-            : duelResult.opponentName,
-        deckName: duelResult.deckName.trim().isEmpty
-            ? record.deckName
-            : duelResult.deckName,
+            : duelResult.opponentName.trim(),
+        playerTwoName: duelResult.opponentName.trim().isEmpty
+            ? record.playerTwoName
+            : duelResult.opponentName.trim(),
+        deckName: widget.deck.name,
       ),
     );
   }
 
   List<GameRecord> _recordsForDeck() {
+    final String deckId = widget.deck.id.trim();
+    final String deckName = widget.deck.name.trim().toLowerCase();
     final List<GameRecord> linked = _records
-        .where((GameRecord record) => record.deckId == widget.deck.id)
+        .where((GameRecord record) {
+          if (record.deckId.trim() == deckId && deckId.isNotEmpty) {
+            return true;
+          }
+          final String recordDeckName = record.deckName.trim().toLowerCase();
+          return deckName.isNotEmpty && recordDeckName == deckName;
+        })
         .toList(growable: false);
     linked.sort((GameRecord a, GameRecord b) {
       return b.createdAt.compareTo(a.createdAt);
@@ -9695,6 +9797,12 @@ class _SideboardMatchupListScreenState
                           final String selectedResult = _selectedMatchResult(
                             record,
                           );
+                          final String opponentLabel =
+                              record.opponentName.trim().isNotEmpty
+                              ? record.opponentName.trim()
+                              : record.playerTwoName.trim().isNotEmpty
+                              ? record.playerTwoName.trim()
+                              : 'Player 2';
                           return Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.all(8),
@@ -9720,6 +9828,17 @@ class _SideboardMatchupListScreenState
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: Colors.white.withValues(alpha: 0.68),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Opponent: $opponentLabel',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white.withValues(alpha: 0.82),
                                   ),
                                 ),
                                 if (record.notes.trim().isNotEmpty) ...[
