@@ -5665,7 +5665,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
               const double spacing = 8;
-              const int buttonsCount = 4;
+              const int buttonsCount = 5;
               final double buttonWidth =
                   ((constraints.maxWidth - spacing * (buttonsCount - 1)) /
                           buttonsCount)
@@ -5709,6 +5709,15 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                       controlButton(
                         onPressed: _openMatchDetailsEditor,
                         icon: const Icon(Icons.edit_outlined, size: 28),
+                      ),
+                      const SizedBox(width: spacing),
+                      controlButton(
+                        onPressed: _selectedDeckForGuide() == null
+                            ? null
+                            : () {
+                                unawaited(_openSideboardGuideDialog());
+                              },
+                        icon: const Icon(Icons.menu_book_outlined, size: 28),
                       ),
                       const SizedBox(width: spacing),
                       controlButton(
@@ -6401,10 +6410,11 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       context: context,
       barrierDismissible: true,
       builder: (BuildContext dialogContext) {
+        final bool canOpenSideboardGuide = _selectedDeckForGuide() != null;
         Widget menuButton({
           required String label,
           required IconData icon,
-          required VoidCallback onPressed,
+          required VoidCallback? onPressed,
         }) {
           return FilledButton.tonal(
             onPressed: onPressed,
@@ -6462,6 +6472,17 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                     Navigator.of(dialogContext).pop();
                     _openMatchDetailsEditor();
                   },
+                ),
+                const SizedBox(height: 8),
+                menuButton(
+                  label: 'Sideboard',
+                  icon: Icons.menu_book_outlined,
+                  onPressed: canOpenSideboardGuide
+                      ? () {
+                          Navigator.of(dialogContext).pop();
+                          _openSideboardGuideDialog();
+                        }
+                      : null,
                 ),
                 const SizedBox(height: 8),
                 menuButton(
@@ -9134,7 +9155,7 @@ class _DuelScreenState extends State<DuelScreen> {
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
               const double spacing = 8;
-              const int buttonsCount = 4;
+              const int buttonsCount = 5;
               final double buttonWidth =
                   ((constraints.maxWidth - spacing * (buttonsCount - 1)) /
                           buttonsCount)
@@ -9180,6 +9201,15 @@ class _DuelScreenState extends State<DuelScreen> {
                       controlButton(
                         onPressed: _openMatchDetailsEditor,
                         child: const Icon(Icons.edit_outlined, size: 30),
+                      ),
+                      const SizedBox(width: spacing),
+                      controlButton(
+                        onPressed: _selectedDeckForGuide() == null
+                            ? null
+                            : () {
+                                unawaited(_openSideboardGuideDialog());
+                              },
+                        child: const Icon(Icons.menu_book_outlined, size: 30),
                       ),
                       const SizedBox(width: spacing),
                       controlButton(
@@ -12273,24 +12303,40 @@ class _SideboardMatchupListScreenState
   }
 
   Future<void> _openMatchupHistory() async {
-    final _DeckMatchupHistoryResult? result = await Navigator.of(context)
-        .push<_DeckMatchupHistoryResult>(
-          MaterialPageRoute<_DeckMatchupHistoryResult>(
-            builder: (_) => _DeckMatchupHistoryScreen(
-              deck: widget.deck.copyWith(
-                matchups: _matchups,
-                userNotes: _userNotes,
-              ),
-              records: _records,
-            ),
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => _DeckMatchupHistoryScreen(
+          deck: widget.deck.copyWith(
+            matchups: _matchups,
+            userNotes: _userNotes,
           ),
-        );
-    if (result == null) {
+          records: _records,
+          mode: _DeckSectionMode.matchupHistory,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSideboardPlans() async {
+    final List<SideboardMatchup>? updated = await Navigator.of(context).push<
+      List<SideboardMatchup>
+    >(
+      MaterialPageRoute<List<SideboardMatchup>>(
+        builder: (_) => _DeckMatchupHistoryScreen(
+          deck: widget.deck.copyWith(
+            matchups: _matchups,
+            userNotes: _userNotes,
+          ),
+          records: _records,
+          mode: _DeckSectionMode.sideboardPlans,
+        ),
+      ),
+    );
+    if (updated == null) {
       return;
     }
     setState(() {
-      _matchups = result.matchups;
-      _records = result.records;
+      _matchups = updated;
     });
   }
 
@@ -12375,8 +12421,15 @@ class _SideboardMatchupListScreenState
               _DeckSectionButton(
                 icon: Icons.history_rounded,
                 title: 'Matchup History',
-                subtitle: 'Sideboard plans and played matchup records',
+                subtitle: 'Saved matches played with this deck',
                 onTap: _openMatchupHistory,
+              ),
+              const SizedBox(height: 10),
+              _DeckSectionButton(
+                icon: Icons.menu_book_rounded,
+                title: 'Sideboard Plans',
+                subtitle: 'Manage side in/out plans by matchup',
+                onTap: _openSideboardPlans,
               ),
               const SizedBox(height: 10),
               _DeckSectionButton(
@@ -12392,17 +12445,6 @@ class _SideboardMatchupListScreenState
       ),
     );
   }
-}
-
-@immutable
-class _DeckMatchupHistoryResult {
-  const _DeckMatchupHistoryResult({
-    required this.matchups,
-    required this.records,
-  });
-
-  final List<SideboardMatchup> matchups;
-  final List<GameRecord> records;
 }
 
 class _DeckSectionButton extends StatelessWidget {
@@ -12526,11 +12568,18 @@ class _DeckUserNotesScreenState extends State<_DeckUserNotesScreen> {
   }
 }
 
+enum _DeckSectionMode { matchupHistory, sideboardPlans }
+
 class _DeckMatchupHistoryScreen extends StatefulWidget {
-  const _DeckMatchupHistoryScreen({required this.deck, required this.records});
+  const _DeckMatchupHistoryScreen({
+    required this.deck,
+    required this.records,
+    required this.mode,
+  });
 
   final SideboardDeck deck;
   final List<GameRecord> records;
+  final _DeckSectionMode mode;
 
   @override
   State<_DeckMatchupHistoryScreen> createState() =>
@@ -12551,12 +12600,11 @@ class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
   }
 
   void _closeWithResult() {
-    Navigator.of(context).pop(
-      _DeckMatchupHistoryResult(
-        matchups: List<SideboardMatchup>.from(_matchups),
-        records: List<GameRecord>.from(_records),
-      ),
-    );
+    if (widget.mode == _DeckSectionMode.sideboardPlans) {
+      Navigator.of(context).pop(List<SideboardMatchup>.from(_matchups));
+      return;
+    }
+    Navigator.of(context).pop();
   }
 
   Future<String?> _promptText({
@@ -12799,6 +12847,7 @@ class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
   Widget build(BuildContext context) {
     final List<SideboardMatchup> sortedMatchups = _sortedMatchups();
     final List<MatchRecord> linkedMatches = _linkedMatchRecords();
+    final bool showSideboardPlans = widget.mode == _DeckSectionMode.sideboardPlans;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) {
@@ -12809,205 +12858,191 @@ class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Matchup History'),
+          title: Text(showSideboardPlans ? 'Sideboard Plans' : 'Matchup History'),
           leading: IconButton(
             onPressed: _closeWithResult,
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
           ),
-          actions: [
-            PopupMenuButton<SideboardMatchupSortMode>(
-              tooltip: 'Sort sideboards',
-              onSelected: (SideboardMatchupSortMode mode) {
-                setState(() {
-                  _matchupSortMode = mode;
-                });
-              },
-              itemBuilder: (BuildContext context) {
-                return const <PopupMenuEntry<SideboardMatchupSortMode>>[
-                  PopupMenuItem<SideboardMatchupSortMode>(
-                    value: SideboardMatchupSortMode.alphabetical,
-                    child: Text('Alphabetical'),
+          actions: showSideboardPlans
+              ? <Widget>[
+                  PopupMenuButton<SideboardMatchupSortMode>(
+                    tooltip: 'Sort sideboards',
+                    onSelected: (SideboardMatchupSortMode mode) {
+                      setState(() {
+                        _matchupSortMode = mode;
+                      });
+                    },
+                    itemBuilder: (BuildContext context) {
+                      return const <PopupMenuEntry<SideboardMatchupSortMode>>[
+                        PopupMenuItem<SideboardMatchupSortMode>(
+                          value: SideboardMatchupSortMode.alphabetical,
+                          child: Text('Alphabetical'),
+                        ),
+                        PopupMenuItem<SideboardMatchupSortMode>(
+                          value: SideboardMatchupSortMode.createdAt,
+                          child: Text('Creation Date'),
+                        ),
+                      ];
+                    },
+                    icon: const Icon(Icons.sort_rounded),
                   ),
-                  PopupMenuItem<SideboardMatchupSortMode>(
-                    value: SideboardMatchupSortMode.createdAt,
-                    child: Text('Creation Date'),
+                  IconButton(
+                    tooltip: 'Add matchup',
+                    onPressed: _addMatchup,
+                    icon: const Icon(Icons.add_rounded),
                   ),
-                ];
-              },
-              icon: const Icon(Icons.sort_rounded),
-            ),
-            IconButton(
-              tooltip: 'Add matchup',
-              onPressed: _addMatchup,
-              icon: const Icon(Icons.add_rounded),
-            ),
-          ],
+                ]
+              : const <Widget>[],
         ),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
           children: [
-            Text(
-              'Sideboard Plans',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-                color: Colors.white.withValues(alpha: 0.92),
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (sortedMatchups.isEmpty)
-              Card(
-                color: const Color(0xFF1E1B1B),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Text(
-                    'No matchups yet. Tap + to add one.',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.74),
-                    ),
-                  ),
-                ),
-              )
-            else
-              ...sortedMatchups.map((SideboardMatchup matchup) {
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  color: const Color(0xFF1E1B1B),
-                  child: ListTile(
-                    onTap: () => _openMatchup(matchup),
-                    title: Text(
-                      matchup.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Side In: ${matchup.sideIn.length}  •  Side Out: ${matchup.sideOut.length}',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.75),
-                        ),
-                      ),
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                  ),
-                );
-              }),
-            const SizedBox(height: 12),
-            Text(
-              'Played Matchups',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-                color: Colors.white.withValues(alpha: 0.92),
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (linkedMatches.isEmpty)
-              Card(
-                color: const Color(0xFF1E1B1B),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Text(
-                    'No saved matches for this deck yet.',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.74),
-                    ),
-                  ),
-                ),
-              )
-            else
-              ...linkedMatches.map((MatchRecord match) {
-                final String opponent =
-                    match.metadata.opponentName.trim().isEmpty
-                    ? '-'
-                    : match.metadata.opponentName.trim();
-                final String opponentDeck =
-                    match.metadata.opponentDeckName.trim().isEmpty
-                    ? '-'
-                    : match.metadata.opponentDeckName.trim();
-                final String resultLabel = _matchAggregateResultLabel(
-                  match.aggregateResult,
-                );
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
+            if (showSideboardPlans) ...[
+              if (sortedMatchups.isEmpty)
+                Card(
                   color: const Color(0xFF1E1B1B),
                   child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                match.metadata.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _matchResultBackgroundColor(resultLabel),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                resultLabel,
-                                style: TextStyle(
-                                  color: _matchResultTextColor(resultLabel),
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _formatDateTime(match.createdAt),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withValues(alpha: 0.7),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Opponent: $opponent',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.82),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Opponent Deck: $opponentDeck',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.78),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${match.games.length} game${match.games.length == 1 ? '' : 's'}',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.7),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                    padding: const EdgeInsets.all(14),
+                    child: Text(
+                      'No sideboard plans yet. Tap + to add one.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.74),
+                      ),
                     ),
                   ),
-                );
-              }),
+                )
+              else
+                ...sortedMatchups.map((SideboardMatchup matchup) {
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    color: const Color(0xFF1E1B1B),
+                    child: ListTile(
+                      onTap: () => _openMatchup(matchup),
+                      title: Text(
+                        matchup.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Side In: ${matchup.sideIn.length}  •  Side Out: ${matchup.sideOut.length}',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.75),
+                          ),
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                    ),
+                  );
+                }),
+            ] else ...[
+              if (linkedMatches.isEmpty)
+                Card(
+                  color: const Color(0xFF1E1B1B),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Text(
+                      'No saved matches for this deck yet.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.74),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                ...linkedMatches.map((MatchRecord match) {
+                  final String opponent =
+                      match.metadata.opponentName.trim().isEmpty
+                      ? '-'
+                      : match.metadata.opponentName.trim();
+                  final String opponentDeck =
+                      match.metadata.opponentDeckName.trim().isEmpty
+                      ? '-'
+                      : match.metadata.opponentDeckName.trim();
+                  final String resultLabel = _matchAggregateResultLabel(
+                    match.aggregateResult,
+                  );
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    color: const Color(0xFF1E1B1B),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  match.metadata.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _matchResultBackgroundColor(resultLabel),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  resultLabel,
+                                  style: TextStyle(
+                                    color: _matchResultTextColor(resultLabel),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _formatDateTime(match.createdAt),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Opponent: $opponent',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.82),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Opponent Deck: $opponentDeck',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.78),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${match.games.length} game${match.games.length == 1 ? '' : 's'}',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+            ],
           ],
         ),
       ),
