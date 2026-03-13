@@ -20,6 +20,20 @@ const String _onboardingCompletedKey = 'onboarding_completed_v1';
 const String _seenInfoTipsKey = 'seen_info_tips_v1';
 const int _defaultDieSides = 6;
 const Duration _diceResultVisibilityDuration = Duration(seconds: 3);
+const List<Color> _appColorPalette = <Color>[
+  Color(0xFF141414),
+  Color(0xFF341212),
+  Color(0xFF1E1B1B),
+  Color(0xFF18321D),
+  Color(0xFF15293B),
+  Color(0xFF2E244A),
+  Color(0xFF4A2A12),
+  Color(0xFF5B2424),
+  Color(0xFF1C5D35),
+  Color(0xFF245D5A),
+  Color(0xFF3B3B3B),
+  Color(0xFF264653),
+];
 
 int _nextDieValue(Random random, {int sides = _defaultDieSides}) {
   return random.nextInt(sides) + 1;
@@ -220,7 +234,7 @@ class AppStrings {
       'sideboardGuide.sideOut': 'Side Out',
       'customize.title': 'Customize App',
       'customize.players': 'Players',
-      'customize.player1Name': 'Player 1 name',
+      'customize.player1Name': 'Player',
       'customize.player2Name': 'Player 2 name',
       'customize.startup': 'Startup',
       'customize.openWith': 'Open app with',
@@ -350,7 +364,7 @@ class AppStrings {
       'sideboardGuide.sideOut': 'Side Out',
       'customize.title': 'Personalizza App',
       'customize.players': 'Giocatori',
-      'customize.player1Name': 'Nome Player 1',
+      'customize.player1Name': 'Player',
       'customize.player2Name': 'Nome Player 2',
       'customize.startup': 'Avvio',
       'customize.openWith': 'Apri app con',
@@ -463,6 +477,17 @@ extension AppTextX on BuildContext {
   AppStrings get txt => AppTextScope.of(this);
 }
 
+void _disposeTextControllersLater(Iterable<TextEditingController> controllers) {
+  final List<TextEditingController> pending = controllers.toList(
+    growable: false,
+  );
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    for (final TextEditingController controller in pending) {
+      controller.dispose();
+    }
+  });
+}
+
 Future<void> showInfoTipOnce({
   required BuildContext context,
   required String tipId,
@@ -505,6 +530,63 @@ String _normalizeTcgKey(String? raw, {String fallback = 'yugioh'}) {
     return normalized;
   }
   return fallback;
+}
+
+String? _supportedTcgKeyOrNull(Object? raw) {
+  if (raw is! String) {
+    return null;
+  }
+  final String normalized = raw.trim().toLowerCase();
+  if (_supportedTcgStorageKeys.contains(normalized)) {
+    return normalized;
+  }
+  return null;
+}
+
+String _normalizeDeckName(String raw) {
+  return raw.trim().toLowerCase();
+}
+
+SideboardDeck? _findUniqueDeckByName(
+  Iterable<SideboardDeck> decks,
+  String rawName,
+) {
+  final String normalized = _normalizeDeckName(rawName);
+  if (normalized.isEmpty) {
+    return null;
+  }
+  SideboardDeck? match;
+  for (final SideboardDeck deck in decks) {
+    if (_normalizeDeckName(deck.name) != normalized) {
+      continue;
+    }
+    if (match != null) {
+      return null;
+    }
+    match = deck;
+  }
+  return match;
+}
+
+bool _hasDeckNameConflict(
+  Iterable<SideboardDeck> decks,
+  String rawName, {
+  String excludedDeckId = '',
+}) {
+  final String normalized = _normalizeDeckName(rawName);
+  if (normalized.isEmpty) {
+    return false;
+  }
+  final String trimmedExcludedId = excludedDeckId.trim();
+  for (final SideboardDeck deck in decks) {
+    if (trimmedExcludedId.isNotEmpty && deck.id == trimmedExcludedId) {
+      continue;
+    }
+    if (_normalizeDeckName(deck.name) == normalized) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool _deckMatchesFormat(SideboardDeck deck, String format) {
@@ -1116,10 +1198,175 @@ List<(String, String)> _splitTwoPlayerHistoryRows(List<String> lines) {
       .toList(growable: false);
 }
 
-Widget _buildLifeHistoryView({
+({String playerName, String content})? _parseNamedLifeHistoryLine(String line) {
+  final int separatorIndex = line.indexOf(':');
+  if (separatorIndex <= 0) {
+    return null;
+  }
+  final String playerName = line.substring(0, separatorIndex).trim();
+  final String content = line.substring(separatorIndex + 1).trim();
+  if (playerName.isEmpty || content.isEmpty) {
+    return null;
+  }
+  return (playerName: playerName, content: content);
+}
+
+({List<String> headers, List<List<String>> rows})?
+_buildThreeOrFourPlayerHistoryGrid({
   required List<String> lines,
+  required int playerCount,
+}) {
+  if (playerCount < 3 || playerCount > 4 || lines.length < playerCount) {
+    return null;
+  }
+
+  final List<String> headers = List<String>.generate(
+    playerCount,
+    (int index) => 'P${index + 1}',
+  );
+  final List<String> initialRow = List<String>.filled(playerCount, '');
+
+  for (int index = 0; index < playerCount; index += 1) {
+    final ({String playerName, String content})? parsed =
+        _parseNamedLifeHistoryLine(lines[index]);
+    if (parsed == null) {
+      return null;
+    }
+    headers[index] = parsed.playerName;
+    initialRow[index] = parsed.content;
+  }
+
+  final Map<String, int> playerIndexByName = <String, int>{
+    for (int index = 0; index < headers.length; index += 1)
+      headers[index].trim().toLowerCase(): index,
+  };
+
+  final List<List<String>> rows = <List<String>>[initialRow];
+  for (final String line in lines.skip(playerCount)) {
+    final ({String playerName, String content})? parsed =
+        _parseNamedLifeHistoryLine(line);
+    if (parsed == null) {
+      return null;
+    }
+    final int? playerIndex =
+        playerIndexByName[parsed.playerName.trim().toLowerCase()];
+    if (playerIndex == null) {
+      return null;
+    }
+    final List<String> row = List<String>.filled(playerCount, '');
+    row[playerIndex] = parsed.content;
+    rows.add(row);
+  }
+
+  return (headers: headers, rows: rows);
+}
+
+Widget _buildColumnarLifeHistoryView({
+  required List<String> headers,
+  required List<List<String>> rows,
   required Color dividerColor,
 }) {
+  final int playerCount = headers.length;
+  final double headerFontSize = playerCount == 4 ? 11.0 : 12.2;
+  final double bodyFontSize = playerCount == 4 ? 10.5 : 11.8;
+  final double horizontalPadding = playerCount == 4 ? 6 : 8;
+  final double minColumnWidth = playerCount == 4 ? 92 : 112;
+
+  Widget buildGridRow(
+    List<String> cells, {
+    required bool isHeader,
+    int? index,
+  }) {
+    final bool isOdd = index != null && index.isOdd;
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: isHeader ? 8 : 7,
+      ),
+      decoration: isHeader
+          ? BoxDecoration(
+              border: Border(bottom: BorderSide(color: dividerColor, width: 1)),
+            )
+          : BoxDecoration(
+              color: isOdd
+                  ? Colors.white.withValues(alpha: 0.03)
+                  : Colors.transparent,
+              border: Border(
+                bottom: BorderSide(color: dividerColor.withValues(alpha: 0.45)),
+              ),
+            ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (int cellIndex = 0; cellIndex < cells.length; cellIndex += 1) ...[
+            Expanded(
+              child: Text(
+                cells[cellIndex],
+                textAlign: TextAlign.left,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: isHeader ? FontWeight.w800 : FontWeight.w500,
+                  fontSize: isHeader ? headerFontSize : bodyFontSize,
+                ),
+              ),
+            ),
+            if (cellIndex < cells.length - 1)
+              Container(
+                width: 1,
+                height: isHeader ? 24 : 20,
+                color: dividerColor,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  return LayoutBuilder(
+    builder: (BuildContext context, BoxConstraints constraints) {
+      final double gridWidth = max(
+        constraints.maxWidth,
+        headers.length * minColumnWidth + (headers.length - 1),
+      );
+      return SingleChildScrollView(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: gridWidth,
+            child: Column(
+              children: [
+                buildGridRow(headers, isHeader: true),
+                for (int index = 0; index < rows.length; index += 1)
+                  buildGridRow(rows[index], isHeader: false, index: index),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildLifeHistoryView({
+  required List<String> lines,
+  required int playerCount,
+  required Color dividerColor,
+}) {
+  if (playerCount >= 3 && playerCount <= 4) {
+    final ({List<String> headers, List<List<String>> rows})? gridData =
+        _buildThreeOrFourPlayerHistoryGrid(
+          lines: lines,
+          playerCount: playerCount,
+        );
+    if (gridData != null) {
+      return _buildColumnarLifeHistoryView(
+        headers: gridData.headers,
+        rows: gridData.rows,
+        dividerColor: dividerColor,
+      );
+    }
+  }
+
   if (!_looksLikeTwoPlayerHistoryTable(lines)) {
     return SingleChildScrollView(
       child: SelectableText(
@@ -1702,16 +1949,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   SideboardDeck? _findDeckByNameForSelectedGame(String rawName) {
-    final String normalized = rawName.trim().toLowerCase();
-    if (normalized.isEmpty) {
-      return null;
-    }
-    for (final SideboardDeck deck in _decksForSelectedGame()) {
-      if (deck.name.trim().toLowerCase() == normalized) {
-        return deck;
-      }
-    }
-    return null;
+    return _findUniqueDeckByName(_decksForSelectedGame(), rawName);
   }
 
   String _defaultDeckNameForSelectedGame() {
@@ -1743,7 +1981,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }) {
     final AppStrings txt = context.txt;
     final String prefix = tcg == SupportedTcg.mtg
-        ? txt.t('tcg.mtg') + ' Match'
+        ? '${txt.t('tcg.mtg')} Match'
         : 'Match';
     return '$prefix $number';
   }
@@ -2084,13 +2322,13 @@ class _HomeScreenState extends State<HomeScreen> {
         .where((String id) => id.isNotEmpty)
         .toSet();
     final Set<String> names = merged
-        .map((SideboardDeck deck) => deck.name.trim().toLowerCase())
+        .map((SideboardDeck deck) => _normalizeDeckName(deck.name))
         .where((String name) => name.isNotEmpty)
         .toSet();
     for (final SideboardDeck deck in incoming) {
       final SideboardDeck normalized = deck.copyWith(tcgKey: tcgKey);
       final String id = normalized.id.trim();
-      final String name = normalized.name.trim().toLowerCase();
+      final String name = _normalizeDeckName(normalized.name);
       if (id.isNotEmpty && ids.contains(id)) {
         continue;
       }
@@ -4061,6 +4299,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
   late final List<String> _historyEntries;
   late final List<TwoPlayerLifeEvent> _twoPlayerLifeEvents;
   late final List<String> _playerNames;
+  late List<Color> _playerCardBackgroundColors;
 
   String _opponentName = '';
   String _opponentDeckInUse = '';
@@ -4154,6 +4393,67 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     return trimmed;
   }
 
+  Color _playerCardBackgroundColor(int playerIndex) {
+    if (playerIndex < 0 || playerIndex >= _playerCardBackgroundColors.length) {
+      return widget.settings.lifePointsBackgroundColor;
+    }
+    return _playerCardBackgroundColors[playerIndex];
+  }
+
+  Future<Color?> _promptPlayerCardColor({
+    required String title,
+    required Color selectedColor,
+  }) async {
+    return showDialog<Color>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final Color color in _appColorPalette)
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(color),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: selectedColor == color
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.2),
+                        width: selectedColor == color ? 2.4 : 1,
+                      ),
+                    ),
+                    child: selectedColor == color
+                        ? const Icon(Icons.check, size: 18, color: Colors.white)
+                        : null,
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.tonal(
+              onPressed: () => Navigator.of(
+                context,
+              ).pop(widget.settings.lifePointsBackgroundColor),
+              child: const Text('Default'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   String _resolveInitialDeckName() {
     final String normalizedInitial = widget.initialDeckName
         .trim()
@@ -4190,16 +4490,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
   }
 
   SideboardDeck? _deckByName(String deckName) {
-    final String normalizedDeck = deckName.trim().toLowerCase();
-    if (normalizedDeck.isEmpty) {
-      return null;
-    }
-    for (final SideboardDeck deck in _sessionAvailableDecks) {
-      if (deck.name.trim().toLowerCase() == normalizedDeck) {
-        return deck;
-      }
-    }
-    return null;
+    return _findUniqueDeckByName(_sessionAvailableDecks, deckName);
   }
 
   SideboardDeck? _selectedDeckForGuide() {
@@ -4211,16 +4502,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
   }
 
   String _deckIdByName(String deckName) {
-    final String normalizedDeck = deckName.trim().toLowerCase();
-    if (normalizedDeck.isEmpty) {
-      return '';
-    }
-    for (final SideboardDeck deck in _sessionAvailableDecks) {
-      if (deck.name.trim().toLowerCase() == normalizedDeck) {
-        return deck.id;
-      }
-    }
-    return '';
+    return _deckByName(deckName)?.id ?? '';
   }
 
   String _selectedOpponentDeckIdForHistory() {
@@ -4261,6 +4543,9 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
   }
 
   Future<void> _openSideboardGuideDialog() async {
+    if (widget.playerCount != 2) {
+      return;
+    }
     final AppStrings txt = context.txt;
     final SideboardDeck? deck = _selectedDeckForGuide();
     if (deck == null) {
@@ -4514,6 +4799,10 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     _playerNames = List<String>.generate(
       widget.playerCount,
       (int index) => _defaultPlayerName(index),
+    );
+    _playerCardBackgroundColors = List<Color>.filled(
+      widget.playerCount,
+      widget.settings.lifePointsBackgroundColor,
     );
     _lifePoints = List<int>.filled(
       widget.playerCount,
@@ -4775,6 +5064,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                         ),
                         child: _buildLifeHistoryView(
                           lines: historySnapshot,
+                          playerCount: widget.playerCount,
                           dividerColor: Colors.white.withValues(alpha: 0.14),
                         ),
                       ),
@@ -5244,13 +5534,18 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
   }
 
   Future<void> _openMatchDetailsEditor() async {
-    await showInfoTipOnce(
-      context: context,
-      tipId: InfoTipIds.opponentDeckSelection,
-      titleKey: 'info.opponentDeck.title',
-      bodyKey: 'info.opponentDeck.body',
-      icon: Icons.arrow_drop_down_circle_outlined,
-    );
+    if (!_isMultiplayer) {
+      await showInfoTipOnce(
+        context: context,
+        tipId: InfoTipIds.opponentDeckSelection,
+        titleKey: 'info.opponentDeck.title',
+        bodyKey: 'info.opponentDeck.body',
+        icon: Icons.arrow_drop_down_circle_outlined,
+      );
+      if (!mounted) {
+        return;
+      }
+    }
     final TextEditingController matchNameController = TextEditingController(
       text: _matchName,
     );
@@ -5265,6 +5560,9 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
           widget.playerCount,
           (int index) => TextEditingController(text: _playerName(index)),
         );
+    final List<Color> selectedPlayerCardColors = List<Color>.from(
+      _playerCardBackgroundColors,
+    );
     String stage = _selectedGameStage;
     String selectedDeckId = _selectedDeckIdForHistory();
     if (selectedDeckId.isEmpty && _deckInUse.trim().isNotEmpty) {
@@ -5359,9 +5657,22 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Match details'),
+          title: Text(_isMultiplayer ? 'Game details' : 'Match details'),
           content: StatefulBuilder(
             builder: (BuildContext context, StateSetter setDialogState) {
+              Future<void> pickPlayerColor(int playerIndex) async {
+                final Color? picked = await _promptPlayerCardColor(
+                  title: 'Player ${playerIndex + 1} card color',
+                  selectedColor: selectedPlayerCardColors[playerIndex],
+                );
+                if (picked == null || !mounted) {
+                  return;
+                }
+                setDialogState(() {
+                  selectedPlayerCardColors[playerIndex] = picked;
+                });
+              }
+
               return SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -5533,31 +5844,33 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                       ),
                       const SizedBox(height: 10),
                     ],
-                    DropdownButtonFormField<String>(
-                      initialValue: stage,
-                      decoration: const InputDecoration(
-                        labelText: 'Game',
-                        border: OutlineInputBorder(),
-                        isDense: true,
+                    if (!_isMultiplayer) ...[
+                      DropdownButtonFormField<String>(
+                        initialValue: stage,
+                        decoration: const InputDecoration(
+                          labelText: 'Game',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: _supportedGameStages
+                            .map((String item) {
+                              return DropdownMenuItem<String>(
+                                value: item,
+                                child: Text(item),
+                              );
+                            })
+                            .toList(growable: false),
+                        onChanged: (String? value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setDialogState(() {
+                            stage = value;
+                          });
+                        },
                       ),
-                      items: _supportedGameStages
-                          .map((String item) {
-                            return DropdownMenuItem<String>(
-                              value: item,
-                              child: Text(item),
-                            );
-                          })
-                          .toList(growable: false),
-                      onChanged: (String? value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setDialogState(() {
-                          stage = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
+                      const SizedBox(height: 10),
+                    ],
                     DropdownButtonFormField<String>(
                       initialValue: selectedDeckId,
                       decoration: const InputDecoration(
@@ -5617,13 +5930,63 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                         playerIndex < widget.playerCount;
                         playerIndex += 1
                       ) ...[
-                        TextField(
-                          controller: playerNameControllers[playerIndex],
-                          decoration: InputDecoration(
-                            labelText: 'Player ${playerIndex + 1} name',
-                            border: const OutlineInputBorder(),
-                            isDense: true,
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: playerNameControllers[playerIndex],
+                                decoration: InputDecoration(
+                                  labelText: 'Player ${playerIndex + 1} name',
+                                  border: const OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            SizedBox(
+                              width: 76,
+                              child: Tooltip(
+                                message:
+                                    'Change Player ${playerIndex + 1} card color',
+                                child: FilledButton.tonal(
+                                  onPressed: () => pickPlayerColor(playerIndex),
+                                  style: FilledButton.styleFrom(
+                                    minimumSize: const Size(76, 48),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 6,
+                                    ),
+                                    backgroundColor:
+                                        selectedPlayerCardColors[playerIndex],
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      side: BorderSide(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.24,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: const [
+                                      Icon(Icons.palette_outlined, size: 18),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'Color',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         if (playerIndex != widget.playerCount - 1)
                           const SizedBox(height: 8),
@@ -5649,12 +6012,22 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     );
 
     if (shouldSave != true) {
-      matchNameController.dispose();
-      opponentController.dispose();
-      tagController.dispose();
-      for (final TextEditingController controller in playerNameControllers) {
-        controller.dispose();
-      }
+      _disposeTextControllersLater(<TextEditingController>[
+        matchNameController,
+        opponentController,
+        tagController,
+        ...playerNameControllers,
+      ]);
+      return;
+    }
+
+    if (!mounted) {
+      _disposeTextControllersLater(<TextEditingController>[
+        matchNameController,
+        opponentController,
+        tagController,
+        ...playerNameControllers,
+      ]);
       return;
     }
 
@@ -5675,7 +6048,9 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       }
       _selectedDeckId = selectedDeckObject?.id ?? '';
       _deckInUse = selectedDeckObject?.name ?? '';
-      _selectedGameStage = stage;
+      if (!_isMultiplayer) {
+        _selectedGameStage = stage;
+      }
       if (widget.playerCount == 2 && stage == 'G1') {
         _bo3Wins = 0;
         _bo3Losses = 0;
@@ -5691,14 +6066,17 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
             playerIndex,
           );
         }
+        _playerCardBackgroundColors = List<Color>.from(
+          selectedPlayerCardColors,
+        );
       }
     });
-    matchNameController.dispose();
-    opponentController.dispose();
-    tagController.dispose();
-    for (final TextEditingController controller in playerNameControllers) {
-      controller.dispose();
-    }
+    _disposeTextControllersLater(<TextEditingController>[
+      matchNameController,
+      opponentController,
+      tagController,
+      ...playerNameControllers,
+    ]);
   }
 
   void _rollDice() {
@@ -5769,7 +6147,11 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('End or reset match'),
+          title: Text(
+            widget.playerCount == 2
+                ? 'End or reset match'
+                : 'End or reset game',
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -5782,14 +6164,16 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                 ),
                 const SizedBox(height: 8),
               ],
-              FilledButton.tonal(
-                onPressed: () => Navigator.of(context).pop('sideboard'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: widget.settings.buttonColor,
+              if (widget.playerCount == 2) ...[
+                FilledButton.tonal(
+                  onPressed: () => Navigator.of(context).pop('sideboard'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: widget.settings.buttonColor,
+                  ),
+                  child: const Text('Sideboard Guide'),
                 ),
-                child: const Text('Sideboard Guide'),
-              ),
-              const SizedBox(height: 8),
+                const SizedBox(height: 8),
+              ],
               FilledButton.tonal(
                 onPressed: () => Navigator.of(context).pop('reset'),
                 style: FilledButton.styleFrom(backgroundColor: resetColor),
@@ -5833,7 +6217,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     if (action == null || !mounted) {
       return;
     }
-    if (action == 'sideboard') {
+    if (action == 'sideboard' && widget.playerCount == 2) {
       await _openSideboardGuideDialog();
       return;
     }
@@ -6411,7 +6795,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
               vertical: dense ? 5 : 8,
             ),
             decoration: BoxDecoration(
-              color: widget.settings.lifePointsBackgroundColor,
+              color: _playerCardBackgroundColor(playerIndex),
               borderRadius: BorderRadius.circular(longSide ? 8 : 14),
               border: Border.all(
                 color: Colors.white.withValues(alpha: longSide ? 0.07 : 0.12),
@@ -7495,15 +7879,6 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                 ),
                 const SizedBox(height: 8),
                 menuButton(
-                  label: 'Sideboard',
-                  icon: Icons.menu_book_outlined,
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop();
-                    _openSideboardGuideDialog();
-                  },
-                ),
-                const SizedBox(height: 8),
-                menuButton(
                   label: 'Dice',
                   icon: Icons.casino_outlined,
                   onPressed: () {
@@ -7716,16 +8091,7 @@ class _DuelScreenState extends State<DuelScreen> {
   }
 
   SideboardDeck? _deckByName(String deckName) {
-    final String normalizedDeck = deckName.trim().toLowerCase();
-    if (normalizedDeck.isEmpty) {
-      return null;
-    }
-    for (final SideboardDeck deck in _sessionAvailableDecks) {
-      if (deck.name.trim().toLowerCase() == normalizedDeck) {
-        return deck;
-      }
-    }
-    return null;
+    return _findUniqueDeckByName(_sessionAvailableDecks, deckName);
   }
 
   SideboardDeck? _selectedDeckForGuide() {
@@ -7737,16 +8103,7 @@ class _DuelScreenState extends State<DuelScreen> {
   }
 
   String _deckIdByName(String deckName) {
-    final String normalizedDeck = deckName.trim().toLowerCase();
-    if (normalizedDeck.isEmpty) {
-      return '';
-    }
-    for (final SideboardDeck deck in _sessionAvailableDecks) {
-      if (deck.name.trim().toLowerCase() == normalizedDeck) {
-        return deck.id;
-      }
-    }
-    return '';
+    return _deckByName(deckName)?.id ?? '';
   }
 
   String _selectedOpponentDeckIdForHistory() {
@@ -8552,6 +8909,7 @@ class _DuelScreenState extends State<DuelScreen> {
                         ),
                         child: _buildLifeHistoryView(
                           lines: historySnapshot,
+                          playerCount: 2,
                           dividerColor: Colors.white.withValues(alpha: 0.14),
                         ),
                       ),
@@ -8940,6 +9298,9 @@ class _DuelScreenState extends State<DuelScreen> {
       bodyKey: 'info.opponentDeck.body',
       icon: Icons.arrow_drop_down_circle_outlined,
     );
+    if (!mounted) {
+      return;
+    }
     final TextEditingController matchNameController = TextEditingController(
       text: _matchName,
     );
@@ -9302,9 +9663,20 @@ class _DuelScreenState extends State<DuelScreen> {
     );
 
     if (shouldSave != true) {
-      matchNameController.dispose();
-      opponentController.dispose();
-      tagController.dispose();
+      _disposeTextControllersLater(<TextEditingController>[
+        matchNameController,
+        opponentController,
+        tagController,
+      ]);
+      return;
+    }
+
+    if (!mounted) {
+      _disposeTextControllersLater(<TextEditingController>[
+        matchNameController,
+        opponentController,
+        tagController,
+      ]);
       return;
     }
 
@@ -9331,9 +9703,11 @@ class _DuelScreenState extends State<DuelScreen> {
         _bo3Losses = 0;
       }
     });
-    matchNameController.dispose();
-    opponentController.dispose();
-    tagController.dispose();
+    _disposeTextControllersLater(<TextEditingController>[
+      matchNameController,
+      opponentController,
+      tagController,
+    ]);
   }
 
   Future<void> _confirmReset({bool fromHome = false}) async {
@@ -10978,16 +11352,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   }
 
   SideboardDeck? _deckByName(String deckName) {
-    final String normalized = deckName.trim().toLowerCase();
-    if (normalized.isEmpty) {
-      return null;
-    }
-    for (final SideboardDeck deck in widget.decks) {
-      if (deck.name.trim().toLowerCase() == normalized) {
-        return deck;
-      }
-    }
-    return null;
+    return _findUniqueDeckByName(widget.decks, deckName);
   }
 
   String _resolvedDeckName(GameRecord record) {
@@ -11183,7 +11548,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     );
 
     if (shouldSave != true) {
-      opponentController.dispose();
+      _disposeTextControllersLater(<TextEditingController>[opponentController]);
       return;
     }
 
@@ -11201,7 +11566,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
         matchResult: result,
       ),
     );
-    opponentController.dispose();
+    _disposeTextControllersLater(<TextEditingController>[opponentController]);
   }
 
   String _buildHistoryExportText() {
@@ -11211,6 +11576,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
               .copyWith(
                 tcgKey: widget.tcg.storageKey,
                 deckName: _resolvedDeckName(record),
+                opponentDeckName: _resolvedOpponentDeckName(record),
               )
               .toJson();
         })
@@ -11242,6 +11608,18 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       throw const FormatException('Invalid history payload');
     }
     final Map<String, dynamic> payload = Map<String, dynamic>.from(decoded);
+    final String? payloadTcgKey = _supportedTcgKeyOrNull(payload['tcg']);
+    if (payload['tcg'] != null && payloadTcgKey == null) {
+      throw const FormatException(
+        'Import failed. Unsupported game in history file.',
+      );
+    }
+    if (payloadTcgKey != null && payloadTcgKey != widget.tcg.storageKey) {
+      final String tcgLabel = SupportedTcgX.fromStorageKey(payloadTcgKey).label;
+      throw FormatException(
+        'This history file belongs to $tcgLabel. Import it from that game history.',
+      );
+    }
     final Object? rawRecords = payload['records'];
     if (rawRecords is! List) {
       throw const FormatException('Missing records list');
@@ -11344,7 +11722,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     );
 
     final String rawInput = textController.text.trim();
-    textController.dispose();
+    _disposeTextControllersLater(<TextEditingController>[textController]);
     if (shouldImport != true || rawInput.isEmpty) {
       return;
     }
@@ -11379,6 +11757,20 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${imported.length} duel(s) imported.')),
+      );
+    } on FormatException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final String message = error.message.trim();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            message.isEmpty
+                ? 'Import failed. Invalid .txt history format.'
+                : message,
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) {
@@ -11497,6 +11889,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
             child: hasHistory
                 ? _buildLifeHistoryView(
                     lines: record.lifePointHistory,
+                    playerCount: record.playerCount,
                     dividerColor: Colors.white.withValues(alpha: 0.14),
                   )
                 : const Text('No life point history saved for this game yet.'),
@@ -12448,16 +12841,7 @@ class _TwoPlayerMatchDetailScreenState
   }
 
   SideboardDeck? _deckByName(String deckName) {
-    final String normalized = deckName.trim().toLowerCase();
-    if (normalized.isEmpty) {
-      return null;
-    }
-    for (final SideboardDeck deck in widget.decks) {
-      if (deck.name.trim().toLowerCase() == normalized) {
-        return deck;
-      }
-    }
-    return null;
+    return _findUniqueDeckByName(widget.decks, deckName);
   }
 
   String _selectedMatchResult(GameRecord record) {
@@ -12525,6 +12909,9 @@ class _TwoPlayerMatchDetailScreenState
       bodyKey: 'info.opponentDeck.body',
       icon: Icons.arrow_drop_down_circle_outlined,
     );
+    if (!mounted) {
+      return;
+    }
     final TextEditingController matchNameController = TextEditingController(
       text: _effectiveMatchName(),
     );
@@ -12784,9 +13171,20 @@ class _TwoPlayerMatchDetailScreenState
     );
 
     if (shouldSave != true) {
-      matchNameController.dispose();
-      opponentController.dispose();
-      tagController.dispose();
+      _disposeTextControllersLater(<TextEditingController>[
+        matchNameController,
+        opponentController,
+        tagController,
+      ]);
+      return;
+    }
+
+    if (!mounted) {
+      _disposeTextControllersLater(<TextEditingController>[
+        matchNameController,
+        opponentController,
+        tagController,
+      ]);
       return;
     }
 
@@ -12806,9 +13204,11 @@ class _TwoPlayerMatchDetailScreenState
         tag: tagController.text.trim(),
       ),
     );
-    matchNameController.dispose();
-    opponentController.dispose();
-    tagController.dispose();
+    _disposeTextControllersLater(<TextEditingController>[
+      matchNameController,
+      opponentController,
+      tagController,
+    ]);
   }
 
   Widget _buildSummaryRow({required String label, required String value}) {
@@ -12989,6 +13389,7 @@ class _TwoPlayerMatchDetailScreenState
             child: hasHistory
                 ? _buildLifeHistoryView(
                     lines: record.lifePointHistory,
+                    playerCount: record.playerCount,
                     dividerColor: Colors.white.withValues(alpha: 0.14),
                   )
                 : const Text('No life point history saved for this game yet.'),
@@ -13438,101 +13839,138 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
   }) async {
     final TextEditingController nameController = TextEditingController();
     final TextEditingController formatController = TextEditingController();
+    String? nameErrorText;
     if (initialDeck != null) {
       nameController.text = initialDeck.name;
       formatController.text = initialDeck.format;
     }
     final List<String> existingFormats = _existingDeckFormats();
-
-    final bool? shouldCreate = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(initialDeck == null ? 'New deck' : 'Edit deck'),
-          content: StatefulBuilder(
+    try {
+      final bool? shouldCreate = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return StatefulBuilder(
             builder: (BuildContext context, StateSetter setDialogState) {
-              final String selectedFormat = formatController.text.trim();
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Deck name',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: formatController,
-                      decoration: const InputDecoration(
-                        labelText: 'Format',
-                        hintText: 'Modern, Commander, Edison...',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    if (existingFormats.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        'Existing formats',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withValues(alpha: 0.74),
+              return AlertDialog(
+                title: Text(initialDeck == null ? 'New deck' : 'Edit deck'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        onChanged: (_) {
+                          if (nameErrorText == null) {
+                            return;
+                          }
+                          setDialogState(() {
+                            nameErrorText = null;
+                          });
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'Deck name',
+                          errorText: nameErrorText,
+                          border: const OutlineInputBorder(),
+                          isDense: true,
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          for (final String format in existingFormats)
-                            ChoiceChip(
-                              label: Text(format),
-                              selected:
-                                  selectedFormat.toLowerCase() ==
-                                  format.toLowerCase(),
-                              onSelected: (_) {
-                                formatController.text = format;
-                                setDialogState(() {});
-                              },
-                            ),
-                        ],
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: formatController,
+                        decoration: const InputDecoration(
+                          labelText: 'Format',
+                          hintText: 'Modern, Commander, Edison...',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
                       ),
+                      if (existingFormats.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          'Existing formats',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.74),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (final String format in existingFormats)
+                              ChoiceChip(
+                                label: Text(format),
+                                selected:
+                                    formatController.text
+                                        .trim()
+                                        .toLowerCase() ==
+                                    format.toLowerCase(),
+                                onSelected: (_) {
+                                  formatController.text = format;
+                                  setDialogState(() {});
+                                },
+                              ),
+                          ],
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final String candidateName = nameController.text.trim();
+                      if (candidateName.isEmpty) {
+                        setDialogState(() {
+                          nameErrorText = 'Deck name is required.';
+                        });
+                        return;
+                      }
+                      if (_hasDeckNameConflict(
+                        _decks,
+                        candidateName,
+                        excludedDeckId: initialDeck?.id ?? '',
+                      )) {
+                        setDialogState(() {
+                          nameErrorText =
+                              'A deck with this name already exists.';
+                        });
+                        return;
+                      }
+                      Navigator.of(context).pop(true);
+                    },
+                    child: Text(initialDeck == null ? 'Create' : 'Save'),
+                  ),
+                ],
               );
             },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(initialDeck == null ? 'Create' : 'Save'),
-            ),
-          ],
-        );
-      },
-    );
+          );
+        },
+      );
 
-    if (shouldCreate != true) {
-      return null;
+      if (shouldCreate != true) {
+        return null;
+      }
+
+      final String name = nameController.text.trim();
+      final String format = formatController.text.trim();
+      if (name.isEmpty) {
+        return null;
+      }
+
+      return (name: name, format: format);
+    } finally {
+      _disposeTextControllersLater(<TextEditingController>[
+        nameController,
+        formatController,
+      ]);
     }
-
-    final String name = nameController.text.trim();
-    final String format = formatController.text.trim();
-    if (name.isEmpty) {
-      return null;
-    }
-
-    return (name: name, format: format);
   }
 
   Future<bool> _confirmAutoMatchupForFormat(String format) async {
@@ -13580,6 +14018,63 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
     }
 
     return deduplicated;
+  }
+
+  List<SideboardDeck> _renameDeckReferencesInMatchups({
+    required List<SideboardDeck> decks,
+    required String oldName,
+    required String newName,
+  }) {
+    final String normalizedOldName = _normalizedMatchupName(oldName);
+    final String trimmedNewName = newName.trim();
+    if (normalizedOldName.isEmpty || trimmedNewName.isEmpty) {
+      return List<SideboardDeck>.from(decks);
+    }
+    return decks
+        .map((SideboardDeck deck) {
+          final List<SideboardMatchup> updatedMatchups = deck.matchups
+              .map((SideboardMatchup matchup) {
+                if (_normalizedMatchupName(matchup.name) != normalizedOldName) {
+                  return matchup;
+                }
+                return matchup.copyWith(name: trimmedNewName);
+              })
+              .toList(growable: false);
+          return deck.copyWith(
+            matchups: _deduplicateMatchupsByName(updatedMatchups),
+          );
+        })
+        .toList(growable: false);
+  }
+
+  List<GameRecord> _renameDeckReferencesInRecords({
+    required List<GameRecord> records,
+    required SideboardDeck previousDeck,
+    required SideboardDeck updatedDeck,
+  }) {
+    final String normalizedOldName = _normalizeDeckName(previousDeck.name);
+    final String updatedName = updatedDeck.name.trim();
+    if (normalizedOldName.isEmpty || updatedName.isEmpty) {
+      return List<GameRecord>.from(records);
+    }
+    final String updatedDeckId = updatedDeck.id.trim();
+    return records
+        .map((GameRecord record) {
+          final bool deckMatches = updatedDeckId.isNotEmpty
+              ? record.deckId.trim() == updatedDeckId
+              : _normalizeDeckName(record.deckName) == normalizedOldName;
+          final bool opponentDeckMatches = updatedDeckId.isNotEmpty
+              ? record.opponentDeckId.trim() == updatedDeckId
+              : _normalizeDeckName(record.opponentDeckName) ==
+                    normalizedOldName;
+          return record.copyWith(
+            deckName: deckMatches ? updatedName : record.deckName,
+            opponentDeckName: opponentDeckMatches
+                ? updatedName
+                : record.opponentDeckName,
+          );
+        })
+        .toList(growable: false);
   }
 
   List<SideboardDeck> _synchronizeFormatMatchupsForNewDeck({
@@ -13634,7 +14129,6 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
         collectInheritedName(matchup.name);
       }
     }
-    collectInheritedName(newDeckName);
 
     final SideboardDeck currentNewDeck = updatedDecks[newDeckIndex];
     final List<SideboardMatchup> newDeckMatchups = _deduplicateMatchupsByName(
@@ -13645,6 +14139,9 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
         .toSet();
 
     for (final MapEntry<String, String> entry in inheritedNames.entries) {
+      if (entry.key == newDeckNameKey) {
+        continue;
+      }
       if (newDeckExistingKeys.contains(entry.key)) {
         continue;
       }
@@ -13747,11 +14244,27 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
     if (index < 0) {
       return;
     }
+    final SideboardDeck updatedDeck = _decks[index].copyWith(
+      name: updated.name,
+      format: updated.format,
+    );
     setState(() {
-      _decks[index] = _decks[index].copyWith(
-        name: updated.name,
-        format: updated.format,
-      );
+      List<SideboardDeck> nextDecks = List<SideboardDeck>.from(_decks);
+      nextDecks[index] = updatedDeck;
+      if (_normalizeDeckName(deck.name) !=
+          _normalizeDeckName(updatedDeck.name)) {
+        nextDecks = _renameDeckReferencesInMatchups(
+          decks: nextDecks,
+          oldName: deck.name,
+          newName: updatedDeck.name,
+        );
+        _records = _renameDeckReferencesInRecords(
+          records: _records,
+          previousDeck: deck,
+          updatedDeck: updatedDeck,
+        );
+      }
+      _decks = nextDecks;
     });
   }
 
@@ -15465,23 +15978,7 @@ class CustomizeScreen extends StatefulWidget {
 }
 
 class _CustomizeScreenState extends State<CustomizeScreen> {
-  static const List<Color> _palette = <Color>[
-    Color(0xFF141414),
-    Color(0xFF341212),
-    Color(0xFF1E1B1B),
-    Color(0xFF18321D),
-    Color(0xFF15293B),
-    Color(0xFF2E244A),
-    Color(0xFF4A2A12),
-    Color(0xFF5B2424),
-    Color(0xFF1C5D35),
-    Color(0xFF245D5A),
-    Color(0xFF3B3B3B),
-    Color(0xFF264653),
-  ];
-
   late final TextEditingController _playerOneController;
-  late final TextEditingController _playerTwoController;
   late final ScrollController _customizeScrollController;
 
   late Color _backgroundStartColor;
@@ -15496,9 +15993,6 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
     super.initState();
     _playerOneController = TextEditingController(
       text: widget.initialSettings.playerOneName,
-    );
-    _playerTwoController = TextEditingController(
-      text: widget.initialSettings.playerTwoName,
     );
     _backgroundStartColor = widget.initialSettings.backgroundStartColor;
     _backgroundEndColor = widget.initialSettings.backgroundEndColor;
@@ -15517,7 +16011,6 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
   @override
   void dispose() {
     _playerOneController.dispose();
-    _playerTwoController.dispose();
     _customizeScrollController.dispose();
     super.dispose();
   }
@@ -15525,15 +16018,12 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
   AppSettings _buildSettings() {
     final AppStrings txt = context.txt;
     final String playerOneName = _playerOneController.text.trim().isEmpty
-        ? txt.t('labels.player1')
+        ? txt.t('customize.player1Name')
         : _playerOneController.text.trim();
-    final String playerTwoName = _playerTwoController.text.trim().isEmpty
-        ? txt.t('labels.player2')
-        : _playerTwoController.text.trim();
 
     return widget.initialSettings.copyWith(
       playerOneName: playerOneName,
-      playerTwoName: playerTwoName,
+      playerTwoName: txt.t('labels.player2'),
       startupTcgKey: _startupTcg.storageKey,
       appLanguageKey: _appLanguage.storageKey,
       backgroundStartColor: _backgroundStartColor,
@@ -15564,7 +16054,7 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
           spacing: 10,
           runSpacing: 10,
           children: [
-            for (final Color color in _palette)
+            for (final Color color in _appColorPalette)
               GestureDetector(
                 onTap: () => onChanged(color),
                 child: AnimatedContainer(
@@ -15635,14 +16125,6 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
               controller: _playerOneController,
               decoration: InputDecoration(
                 labelText: txt.t('customize.player1Name'),
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _playerTwoController,
-              decoration: InputDecoration(
-                labelText: txt.t('customize.player2Name'),
                 border: const OutlineInputBorder(),
               ),
             ),
@@ -15778,7 +16260,7 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          '${_playerOneController.text.trim().isEmpty ? txt.t('labels.player1') : _playerOneController.text.trim()} vs ${_playerTwoController.text.trim().isEmpty ? txt.t('labels.player2') : _playerTwoController.text.trim()}',
+                          '${_playerOneController.text.trim().isEmpty ? txt.t('customize.player1Name') : _playerOneController.text.trim()} vs ${txt.t('labels.player2')}',
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
