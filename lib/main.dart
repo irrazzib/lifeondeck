@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +18,12 @@ const Set<String> _supportedTcgStorageKeys = <String>{
 const String _appBuildTag = 'build 8286103';
 const String _onboardingCompletedKey = 'onboarding_completed_v1';
 const String _seenInfoTipsKey = 'seen_info_tips_v1';
+const int _defaultDieSides = 6;
+const Duration _diceResultVisibilityDuration = Duration(seconds: 3);
+
+int _nextDieValue(Random random, {int sides = _defaultDieSides}) {
+  return random.nextInt(sides) + 1;
+}
 
 enum AppLanguage { system, english, italian }
 
@@ -79,6 +86,30 @@ class AppRuntimeConfig {
   );
 }
 
+class AppOrientationLock {
+  const AppOrientationLock._();
+
+  static const List<DeviceOrientation> _mobilePortraitOnly =
+      <DeviceOrientation>[DeviceOrientation.portraitUp];
+
+  static bool get _shouldLockForCurrentPlatform {
+    if (kIsWeb) {
+      return false;
+    }
+    return defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.android;
+  }
+
+  // The current mobile life-counter UX is designed for a fixed portrait canvas.
+  // Keeping the lock centralized avoids fragile per-route orientation toggles.
+  static Future<void> enforceMobilePortrait() async {
+    if (!_shouldLockForCurrentPlatform) {
+      return;
+    }
+    await SystemChrome.setPreferredOrientations(_mobilePortraitOnly);
+  }
+}
+
 class InfoTipIds {
   static const String matchHistory = 'match_history';
   static const String statistics = 'statistics';
@@ -139,6 +170,7 @@ class AppStrings {
       'common.close': 'Close',
       'common.cancel': 'Cancel',
       'common.save': 'Save',
+      'common.clear': 'Clear',
       'common.notNow': 'Not now',
       'common.premium': 'Premium feature',
       'tcg.yugioh': 'Yugioh',
@@ -181,6 +213,11 @@ class AppStrings {
       'info.opponentDeck.title': 'Opponent Deck',
       'info.opponentDeck.body':
           'Pick an existing opponent deck or create one quickly from the dropdown.',
+      'sideboardGuide.dialogTitle': 'Sideboard Guide',
+      'sideboardGuide.noDeckSelected': 'No deck selected.',
+      'sideboardGuide.noPlansForDeck': 'No sideboard available for this deck.',
+      'sideboardGuide.sideIn': 'Side In',
+      'sideboardGuide.sideOut': 'Side Out',
       'customize.title': 'Customize App',
       'customize.players': 'Players',
       'customize.player1Name': 'Player 1 name',
@@ -204,15 +241,34 @@ class AppStrings {
       'history.empty':
           'No games tracked yet.\nStart a game or create one manually.',
       'history.sortFilter': 'Sort/filter',
+      'history.sortBy': 'Sort by',
+      'history.filters': 'Filters',
+      'history.clearFilters': 'Clear filters',
       'history.byDate': 'By date',
       'history.byName': 'By name',
+      'history.allDecks': 'All decks',
+      'history.allOpponentDecks': 'All opponent decks',
+      'history.allFormats': 'All formats',
+      'history.opponentSearch': 'Opponent name',
       'history.byTag': 'By tag',
       'history.allTags': 'All tags',
       'history.noMatchesForTag': 'No matches for "{tag}".',
+      'history.noMatchesWithFilters': 'No matches match the current filters.',
       'history.importTxt': 'Import .txt',
       'history.exportTxt': 'Export .txt',
       'history.addMatch': 'Add match',
       'history.addGame': 'Add game',
+      'deckList.sortBy': 'Sort decks by',
+      'deckList.filters': 'Deck filters',
+      'deckList.sortAlphabetical': 'Alphabetical',
+      'deckList.sortCreationDate': 'Creation date',
+      'deckList.sortFormat': 'Format',
+      'deckList.favoritesOnly': 'Favorites only',
+      'deckList.allFormats': 'All formats',
+      'deckList.allTags': 'All tags',
+      'deckList.clearFilters': 'Clear filters',
+      'deckList.empty': 'No decks yet.\nTap + to create your first deck.',
+      'deckList.noDecksWithFilters': 'No decks match the current filters.',
       'statistics.title': 'Statistics',
       'statistics.empty': 'No match data for this deck yet.',
       'statistics.vs': 'vs {deck}',
@@ -243,6 +299,7 @@ class AppStrings {
       'common.close': 'Chiudi',
       'common.cancel': 'Annulla',
       'common.save': 'Salva',
+      'common.clear': 'Pulisci',
       'common.notNow': 'Non ora',
       'common.premium': 'Funzionalita premium',
       'tcg.yugioh': 'Yugioh',
@@ -285,6 +342,12 @@ class AppStrings {
       'info.opponentDeck.title': 'Deck Avversario',
       'info.opponentDeck.body':
           'Seleziona un deck esistente o creane uno al volo dal menu.',
+      'sideboardGuide.dialogTitle': 'Guida Sideboard',
+      'sideboardGuide.noDeckSelected': 'Nessun deck selezionato.',
+      'sideboardGuide.noPlansForDeck':
+          'Nessuna sideboard disponibile per questo deck.',
+      'sideboardGuide.sideIn': 'Side In',
+      'sideboardGuide.sideOut': 'Side Out',
       'customize.title': 'Personalizza App',
       'customize.players': 'Giocatori',
       'customize.player1Name': 'Nome Player 1',
@@ -307,15 +370,36 @@ class AppStrings {
       'history.title': 'Cronologia Partite',
       'history.empty': 'Nessuna partita salvata.\nInizia un game o creane uno.',
       'history.sortFilter': 'Ordina/filtra',
+      'history.sortBy': 'Ordina per',
+      'history.filters': 'Filtri',
+      'history.clearFilters': 'Azzera filtri',
       'history.byDate': 'Per data',
       'history.byName': 'Per nome',
+      'history.allDecks': 'Tutti i deck',
+      'history.allOpponentDecks': 'Tutti i deck avversari',
+      'history.allFormats': 'Tutti i format',
+      'history.opponentSearch': 'Nome avversario',
       'history.byTag': 'Per tag',
       'history.allTags': 'Tutti i tag',
       'history.noMatchesForTag': 'Nessun match per "{tag}".',
+      'history.noMatchesWithFilters':
+          'Nessun match corrisponde ai filtri attivi.',
       'history.importTxt': 'Importa .txt',
       'history.exportTxt': 'Esporta .txt',
       'history.addMatch': 'Aggiungi match',
       'history.addGame': 'Aggiungi game',
+      'deckList.sortBy': 'Ordina i deck per',
+      'deckList.filters': 'Filtri deck',
+      'deckList.sortAlphabetical': 'Alfabetico',
+      'deckList.sortCreationDate': 'Data creazione',
+      'deckList.sortFormat': 'Format',
+      'deckList.favoritesOnly': 'Solo preferiti',
+      'deckList.allFormats': 'Tutti i format',
+      'deckList.allTags': 'Tutti i tag',
+      'deckList.clearFilters': 'Azzera filtri',
+      'deckList.empty': 'Nessun deck.\nTocca + per creare il primo deck.',
+      'deckList.noDecksWithFilters':
+          'Nessun deck corrisponde ai filtri attivi.',
       'statistics.title': 'Statistiche',
       'statistics.empty': 'Nessun dato match per questo deck.',
       'statistics.vs': 'vs {deck}',
@@ -423,11 +507,26 @@ String _normalizeTcgKey(String? raw, {String fallback = 'yugioh'}) {
   return fallback;
 }
 
+bool _deckMatchesFormat(SideboardDeck deck, String format) {
+  final String normalizedFormat = format.trim().toLowerCase();
+  if (normalizedFormat.isEmpty) {
+    return true;
+  }
+  return deck.format.trim().toLowerCase() == normalizedFormat;
+}
+
+List<SideboardDeck> _filterDecksByFormat(
+  Iterable<SideboardDeck> decks,
+  String format,
+) {
+  return decks
+      .where((SideboardDeck deck) => _deckMatchesFormat(deck, format))
+      .toList(growable: false);
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations(const <DeviceOrientation>[
-    DeviceOrientation.portraitUp,
-  ]);
+  await AppOrientationLock.enforceMobilePortrait();
   runApp(const YugiLifeCounterApp());
 }
 
@@ -438,7 +537,28 @@ class YugiLifeCounterApp extends StatefulWidget {
   State<YugiLifeCounterApp> createState() => _YugiLifeCounterAppState();
 }
 
-class _YugiLifeCounterAppState extends State<YugiLifeCounterApp> {
+class _YugiLifeCounterAppState extends State<YugiLifeCounterApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(AppOrientationLock.enforceMobilePortrait());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(AppOrientationLock.enforceMobilePortrait());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<AppLanguage>(
@@ -920,6 +1040,9 @@ class DuelResultPayload {
   final String matchId;
   final String matchName;
 }
+
+typedef DuelCheckpointCallback =
+    Future<void> Function(DuelResultPayload payload);
 
 @immutable
 class TwoPlayerLifeEvent {
@@ -1406,7 +1529,15 @@ int _gameStageSortKey(String rawStage) {
 
 enum MatchAggregateResult { pending, win, loss, draw }
 
-enum MatchHistorySortMode { date, name, tag }
+enum MatchHistorySortMode { date, name }
+
+@immutable
+class _FilterOption {
+  const _FilterOption({required this.value, required this.label});
+
+  final String value;
+  final String label;
+}
 
 String _normalizedMatchResultOrEmpty(String raw) {
   final String trimmed = raw.trim();
@@ -1551,6 +1682,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, String> _lastDeckByTcg = <String, String>{};
   SupportedTcg _selectedGame = SupportedTcg.yugioh;
   String _saveDebugStatus = 'idle';
+  Future<void> _queuedCheckpointSave = Future<void>.value();
 
   String get _selectedTcgKey => _selectedGame.storageKey;
   bool get _isImplementedGame =>
@@ -1614,6 +1746,271 @@ class _HomeScreenState extends State<HomeScreen> {
         ? txt.t('tcg.mtg') + ' Match'
         : 'Match';
     return '$prefix $number';
+  }
+
+  String _gameRecordIdForPayload({
+    required String tcgKey,
+    required int playerCount,
+    required DuelCompletedGamePayload payload,
+    String? normalizedStage,
+    String? normalizedMatchId,
+  }) {
+    final String resolvedStage = (normalizedStage ?? payload.gameStage)
+        .trim()
+        .toUpperCase();
+    final String matchId = (normalizedMatchId ?? payload.matchId).trim();
+    return [
+      tcgKey,
+      playerCount.toString(),
+      payload.createdAt.toUtc().microsecondsSinceEpoch.toString(),
+      matchId.isEmpty ? 'single' : matchId,
+      resolvedStage.isEmpty ? 'G1' : resolvedStage,
+    ].join('|');
+  }
+
+  List<GameRecord> _buildGameRecordsFromDuelResult({
+    required SupportedTcg tcg,
+    required String tcgKey,
+    required String duelTitlePrefix,
+    required DuelResultPayload duelResult,
+    required List<SideboardDeck> availableDecks,
+  }) {
+    final List<DuelCompletedGamePayload> payloadGames =
+        duelResult.completedGames.isNotEmpty
+        ? List<DuelCompletedGamePayload>.from(duelResult.completedGames)
+        : <DuelCompletedGamePayload>[
+            DuelCompletedGamePayload(
+              lifePointHistory: List<String>.from(duelResult.lifePointHistory),
+              gameStage: duelResult.gameStage,
+              opponentName: duelResult.opponentName,
+              deckId: duelResult.deckId,
+              deckName: duelResult.deckName,
+              opponentDeckId: duelResult.opponentDeckId,
+              opponentDeckName: duelResult.opponentDeckName,
+              matchFormat: duelResult.matchFormat,
+              matchTag: duelResult.matchTag,
+              matchId: duelResult.matchId,
+              matchName: duelResult.matchName,
+              matchResult: duelResult.matchResult,
+              createdAt: DateTime.now(),
+            ),
+          ];
+
+    final int normalizedPlayerCount = duelResult.playerCount
+        .clamp(2, 6)
+        .toInt();
+    final bool isTwoPlayerSession = normalizedPlayerCount == 2;
+    String sessionMatchId = isTwoPlayerSession ? duelResult.matchId.trim() : '';
+    if (isTwoPlayerSession && sessionMatchId.isEmpty) {
+      sessionMatchId = 'match-${DateTime.now().microsecondsSinceEpoch}';
+    }
+    String sessionMatchName = isTwoPlayerSession
+        ? duelResult.matchName.trim()
+        : '';
+    if (isTwoPlayerSession && sessionMatchName.isEmpty) {
+      sessionMatchName = _defaultMatchNameFor(
+        tcg: tcg,
+        number: _nextTwoPlayerMatchNumberForTcg(tcgKey),
+      );
+    }
+
+    int nextGeneratedMatchNumber = _nextTwoPlayerMatchNumberForTcg(tcgKey);
+    final Map<String, String> generatedMatchNames = <String, String>{};
+    final Map<String, GameRecord> existingById = <String, GameRecord>{
+      for (final GameRecord record in _gameRecords) record.id: record,
+    };
+    final int scopedExistingCount = _gameRecords
+        .where((GameRecord record) => record.tcgKey == tcgKey)
+        .length;
+    int nextGeneratedTitleIndex = scopedExistingCount + 1;
+    final List<GameRecord> newRecords = <GameRecord>[];
+
+    for (final DuelCompletedGamePayload payload in payloadGames) {
+      final List<String> normalizedHistory = payload.lifePointHistory
+          .map((String line) => line.trim())
+          .where((String line) => line.isNotEmpty)
+          .toList(growable: false);
+      final String rawResult = payload.matchResult.trim();
+      final String normalizedResult = _supportedMatchResults.contains(rawResult)
+          ? rawResult
+          : '';
+      final String rawStage = payload.gameStage.trim().toUpperCase();
+      final String normalizedStage = _supportedGameStages.contains(rawStage)
+          ? rawStage
+          : 'G1';
+      if (normalizedHistory.isEmpty && normalizedResult.isEmpty) {
+        continue;
+      }
+
+      final String rawDeckName = payload.deckName.trim();
+      final String payloadDeckId = payload.deckId.trim();
+      SideboardDeck? selectedDeck;
+      if (payloadDeckId.isNotEmpty) {
+        for (final SideboardDeck deck in availableDecks) {
+          if (deck.id == payloadDeckId) {
+            selectedDeck = deck;
+            break;
+          }
+        }
+      }
+      selectedDeck ??= _findDeckByNameForSelectedGame(rawDeckName);
+      final String resolvedDeckId = selectedDeck?.id ?? payloadDeckId;
+      final String resolvedDeckName = selectedDeck?.name ?? rawDeckName;
+
+      final String rawOpponentDeckName = payload.opponentDeckName.trim();
+      final String payloadOpponentDeckId = payload.opponentDeckId.trim();
+      SideboardDeck? selectedOpponentDeck;
+      if (payloadOpponentDeckId.isNotEmpty) {
+        for (final SideboardDeck deck in availableDecks) {
+          if (deck.id == payloadOpponentDeckId) {
+            selectedOpponentDeck = deck;
+            break;
+          }
+        }
+      }
+      selectedOpponentDeck ??= _findDeckByNameForSelectedGame(
+        rawOpponentDeckName,
+      );
+      final String resolvedOpponentDeckId =
+          selectedOpponentDeck?.id ?? payloadOpponentDeckId;
+      final String resolvedOpponentDeckName =
+          selectedOpponentDeck?.name ?? rawOpponentDeckName;
+
+      final String resolvedOpponentName = payload.opponentName.trim();
+      final String resolvedMatchFormat = payload.matchFormat.trim().isNotEmpty
+          ? payload.matchFormat.trim()
+          : (selectedDeck?.format.trim() ?? '');
+      final String resolvedMatchTag = payload.matchTag.trim();
+      final DateTime createdAt = payload.createdAt;
+
+      String resolvedMatchId = '';
+      String resolvedMatchName = '';
+      if (isTwoPlayerSession) {
+        resolvedMatchId = payload.matchId.trim();
+        if (resolvedMatchId.isEmpty) {
+          resolvedMatchId = sessionMatchId;
+        }
+        if (resolvedMatchId.isEmpty) {
+          resolvedMatchId = 'match-${createdAt.microsecondsSinceEpoch}';
+        }
+        resolvedMatchName = payload.matchName.trim();
+        if (resolvedMatchName.isEmpty &&
+            sessionMatchName.isNotEmpty &&
+            (payload.matchId.trim().isEmpty ||
+                payload.matchId.trim() == sessionMatchId)) {
+          resolvedMatchName = sessionMatchName;
+        }
+        if (resolvedMatchName.isEmpty) {
+          resolvedMatchName = generatedMatchNames.putIfAbsent(
+            resolvedMatchId,
+            () {
+              final String generated = _defaultMatchNameFor(
+                tcg: tcg,
+                number: nextGeneratedMatchNumber,
+              );
+              nextGeneratedMatchNumber += 1;
+              return generated;
+            },
+          );
+        }
+      }
+
+      final String recordId = _gameRecordIdForPayload(
+        tcgKey: tcgKey,
+        playerCount: normalizedPlayerCount,
+        payload: payload,
+        normalizedStage: normalizedStage,
+        normalizedMatchId: resolvedMatchId,
+      );
+      final GameRecord? existingRecord = existingById[recordId];
+      final String title =
+          existingRecord?.title ??
+          '$duelTitlePrefix ${nextGeneratedTitleIndex++}';
+
+      newRecords.add(
+        GameRecord(
+          id: recordId,
+          title: title,
+          createdAt: createdAt,
+          gameStage: normalizedStage,
+          notes: existingRecord?.notes ?? '',
+          lifePointHistory: normalizedHistory,
+          tcgKey: tcgKey,
+          deckId: resolvedDeckId,
+          matchResult: normalizedResult,
+          opponentName: resolvedOpponentName,
+          deckName: resolvedDeckName,
+          playerOneName:
+              existingRecord?.playerOneName ?? _settings.playerOneName,
+          playerTwoName: resolvedOpponentName.isEmpty
+              ? _settings.playerTwoName
+              : resolvedOpponentName,
+          playerCount: normalizedPlayerCount,
+          matchId: resolvedMatchId,
+          matchName: resolvedMatchName,
+          matchFormat: resolvedMatchFormat,
+          opponentDeckId: resolvedOpponentDeckId,
+          opponentDeckName: resolvedOpponentDeckName,
+          matchTag: resolvedMatchTag,
+        ),
+      );
+    }
+
+    return newRecords;
+  }
+
+  Future<int> _persistDuelResultRecords({
+    required SupportedTcg tcg,
+    required String tcgKey,
+    required String duelTitlePrefix,
+    required DuelResultPayload duelResult,
+    required List<SideboardDeck> availableDecks,
+    String debugPrefix = 'saved',
+  }) async {
+    final List<GameRecord> newRecords = _buildGameRecordsFromDuelResult(
+      tcg: tcg,
+      tcgKey: tcgKey,
+      duelTitlePrefix: duelTitlePrefix,
+      duelResult: duelResult,
+      availableDecks: availableDecks,
+    );
+
+    if (newRecords.isEmpty) {
+      setState(() {
+        _saveDebugStatus = '$debugPrefix: no completed games to save';
+      });
+      await _persistState();
+      return 0;
+    }
+
+    final Set<String> existingIds = _gameRecords
+        .map((GameRecord record) => record.id)
+        .toSet();
+    final int insertedCount = newRecords
+        .where((GameRecord record) => !existingIds.contains(record.id))
+        .length;
+    final int updatedCount = newRecords.length - insertedCount;
+
+    final Map<String, GameRecord> mergedById = <String, GameRecord>{
+      for (final GameRecord record in _gameRecords) record.id: record,
+    };
+    for (final GameRecord record in newRecords) {
+      mergedById[record.id] = record;
+    }
+
+    final List<GameRecord> mergedRecords =
+        mergedById.values.toList(growable: false)
+          ..sort((GameRecord a, GameRecord b) {
+            return b.createdAt.compareTo(a.createdAt);
+          });
+
+    setState(() {
+      _gameRecords = mergedRecords;
+      _saveDebugStatus =
+          '$debugPrefix: +$insertedCount new, ~$updatedCount updated';
+    });
+    await _persistState();
+    return insertedCount;
   }
 
   Map<String, String> _decodeLastDeckByTcg(String? raw) {
@@ -1924,21 +2321,71 @@ class _HomeScreenState extends State<HomeScreen> {
     final AppStrings txt = context.txt;
     late final Widget duelScreen;
     String duelTitlePrefix = 'Duel';
+    final SupportedTcg selectedGame = _selectedGame;
     final String selectedTcgKey = _selectedTcgKey;
     List<SideboardDeck> availableDecks = _decksForSelectedGame();
-    List<String> availableDeckNames = availableDecks
+    final List<String> availableDeckNames = availableDecks
         .map((SideboardDeck deck) => deck.name)
         .toList(growable: false);
     final String defaultDeckName = _defaultDeckNameForSelectedGame();
 
-    if (_selectedGame == SupportedTcg.yugioh) {
+    Future<void> mergeCreatedDecksFromPayload(DuelResultPayload payload) async {
+      final List<SideboardDeck> newlyCreatedDecks = payload.createdDecks
+          .where(
+            (SideboardDeck deck) =>
+                deck.name.trim().isNotEmpty && deck.tcgKey == selectedTcgKey,
+          )
+          .toList(growable: false);
+      if (newlyCreatedDecks.isEmpty) {
+        return;
+      }
+      availableDecks = _mergeDeckCollections(
+        existing: availableDecks,
+        incoming: newlyCreatedDecks,
+        tcgKey: selectedTcgKey,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _sideboardDecks = _mergeDecksForGame(availableDecks, selectedTcgKey);
+      });
+    }
+
+    Future<void> persistCheckpoint(DuelResultPayload payload) async {
+      _queuedCheckpointSave = _queuedCheckpointSave.then((_) async {
+        final String latestDeckName = payload.deckName.trim();
+        if (latestDeckName.isNotEmpty && mounted) {
+          setState(() {
+            _lastDeckByTcg[selectedTcgKey] = latestDeckName;
+          });
+        }
+        await mergeCreatedDecksFromPayload(payload);
+        if (!payload.shouldSave || payload.completedGames.isEmpty) {
+          await _persistState();
+          return;
+        }
+        await _persistDuelResultRecords(
+          tcg: selectedGame,
+          tcgKey: selectedTcgKey,
+          duelTitlePrefix: duelTitlePrefix,
+          duelResult: payload,
+          availableDecks: availableDecks,
+          debugPrefix: 'checkpoint',
+        );
+      });
+      await _queuedCheckpointSave;
+    }
+
+    if (selectedGame == SupportedTcg.yugioh) {
       duelScreen = DuelScreen(
         settings: _settings,
         availableDeckNames: availableDeckNames,
         availableDecks: availableDecks,
         initialDeckName: defaultDeckName,
+        onCheckpoint: persistCheckpoint,
       );
-    } else if (_selectedGame == SupportedTcg.mtg) {
+    } else if (selectedGame == SupportedTcg.mtg) {
       final MtgDuelSetupResult? setupResult = await Navigator.of(context)
           .push<MtgDuelSetupResult>(
             MaterialPageRoute<MtgDuelSetupResult>(
@@ -1957,6 +2404,7 @@ class _HomeScreenState extends State<HomeScreen> {
         availableDeckNames: availableDeckNames,
         availableDecks: availableDecks,
         initialDeckName: defaultDeckName,
+        onCheckpoint: persistCheckpoint,
       );
       duelTitlePrefix = 'MTG Game';
     } else {
@@ -1971,6 +2419,8 @@ class _HomeScreenState extends State<HomeScreen> {
         .push<DuelResultPayload>(
           MaterialPageRoute<DuelResultPayload>(builder: (_) => duelScreen),
         );
+
+    await _queuedCheckpointSave;
 
     final String latestDeckName = duelResult?.deckName.trim() ?? '';
     if (duelResult != null) {
@@ -1987,211 +2437,26 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final List<SideboardDeck> newlyCreatedDecks = duelResult.createdDecks
-        .where(
-          (SideboardDeck deck) =>
-              deck.name.trim().isNotEmpty && deck.tcgKey == selectedTcgKey,
-        )
-        .toList(growable: false);
-    if (newlyCreatedDecks.isNotEmpty) {
-      availableDecks = _mergeDeckCollections(
-        existing: availableDecks,
-        incoming: newlyCreatedDecks,
-        tcgKey: selectedTcgKey,
-      );
-      availableDeckNames = availableDecks
-          .map((SideboardDeck deck) => deck.name)
-          .toList(growable: false);
-      setState(() {
-        _sideboardDecks = _mergeDecksForGame(availableDecks, selectedTcgKey);
-      });
-    }
+    await mergeCreatedDecksFromPayload(duelResult);
 
     if (!duelResult.shouldSave) {
       setState(() {
-        _saveDebugStatus = 'shouldSave=false -> skipped';
+        _saveDebugStatus = 'current game discarded; confirmed games kept';
       });
       await _persistState();
       return;
     }
 
-    final List<DuelCompletedGamePayload> payloadGames =
-        duelResult.completedGames.isNotEmpty
-        ? List<DuelCompletedGamePayload>.from(duelResult.completedGames)
-        : <DuelCompletedGamePayload>[
-            DuelCompletedGamePayload(
-              lifePointHistory: List<String>.from(duelResult.lifePointHistory),
-              gameStage: duelResult.gameStage,
-              opponentName: duelResult.opponentName,
-              deckId: duelResult.deckId,
-              deckName: duelResult.deckName,
-              opponentDeckId: duelResult.opponentDeckId,
-              opponentDeckName: duelResult.opponentDeckName,
-              matchFormat: duelResult.matchFormat,
-              matchTag: duelResult.matchTag,
-              matchId: duelResult.matchId,
-              matchName: duelResult.matchName,
-              matchResult: duelResult.matchResult,
-              createdAt: DateTime.now(),
-            ),
-          ];
-
-    final List<GameRecord> newRecords = <GameRecord>[];
-    final int normalizedPlayerCount = duelResult.playerCount
-        .clamp(2, 6)
-        .toInt();
-    final bool isTwoPlayerSession = normalizedPlayerCount == 2;
-    String sessionMatchId = isTwoPlayerSession ? duelResult.matchId.trim() : '';
-    if (isTwoPlayerSession && sessionMatchId.isEmpty) {
-      sessionMatchId = 'match-${DateTime.now().microsecondsSinceEpoch}';
-    }
-    String sessionMatchName = isTwoPlayerSession
-        ? duelResult.matchName.trim()
-        : '';
-    if (isTwoPlayerSession && sessionMatchName.isEmpty) {
-      sessionMatchName = _defaultMatchNameFor(
-        tcg: _selectedGame,
-        number: _nextTwoPlayerMatchNumberForTcg(selectedTcgKey),
-      );
-    }
-    int nextGeneratedMatchNumber = _nextTwoPlayerMatchNumberForTcg(
-      selectedTcgKey,
+    final int insertedCount = await _persistDuelResultRecords(
+      tcg: selectedGame,
+      tcgKey: selectedTcgKey,
+      duelTitlePrefix: duelTitlePrefix,
+      duelResult: duelResult,
+      availableDecks: availableDecks,
+      debugPrefix: 'final save',
     );
-    final Map<String, String> generatedMatchNames = <String, String>{};
-    for (int index = 0; index < payloadGames.length; index += 1) {
-      final DuelCompletedGamePayload payload = payloadGames[index];
-      final List<String> normalizedHistory = payload.lifePointHistory
-          .map((String line) => line.trim())
-          .where((String line) => line.isNotEmpty)
-          .toList(growable: false);
-      final String rawResult = payload.matchResult.trim();
-      final String normalizedResult = _supportedMatchResults.contains(rawResult)
-          ? rawResult
-          : '';
-      final String rawStage = payload.gameStage.trim().toUpperCase();
-      final String normalizedStage = _supportedGameStages.contains(rawStage)
-          ? rawStage
-          : 'G1';
-      if (normalizedHistory.isEmpty && normalizedResult.isEmpty) {
-        continue;
-      }
 
-      final String rawDeckName = payload.deckName.trim();
-      final String payloadDeckId = payload.deckId.trim();
-      SideboardDeck? selectedDeck;
-      if (payloadDeckId.isNotEmpty) {
-        for (final SideboardDeck deck in availableDecks) {
-          if (deck.id == payloadDeckId) {
-            selectedDeck = deck;
-            break;
-          }
-        }
-      }
-      selectedDeck ??= _findDeckByNameForSelectedGame(rawDeckName);
-      final String resolvedDeckId = selectedDeck?.id ?? payloadDeckId;
-      final String resolvedDeckName = selectedDeck?.name ?? rawDeckName;
-      final String rawOpponentDeckName = payload.opponentDeckName.trim();
-      final String payloadOpponentDeckId = payload.opponentDeckId.trim();
-      SideboardDeck? selectedOpponentDeck;
-      if (payloadOpponentDeckId.isNotEmpty) {
-        for (final SideboardDeck deck in availableDecks) {
-          if (deck.id == payloadOpponentDeckId) {
-            selectedOpponentDeck = deck;
-            break;
-          }
-        }
-      }
-      selectedOpponentDeck ??= _findDeckByNameForSelectedGame(
-        rawOpponentDeckName,
-      );
-      final String resolvedOpponentDeckId =
-          selectedOpponentDeck?.id ?? payloadOpponentDeckId;
-      final String resolvedOpponentDeckName =
-          selectedOpponentDeck?.name ?? rawOpponentDeckName;
-      final String resolvedOpponentName = payload.opponentName.trim();
-      final String resolvedMatchFormat = payload.matchFormat.trim().isNotEmpty
-          ? payload.matchFormat.trim()
-          : (selectedDeck?.format.trim() ?? '');
-      final String resolvedMatchTag = payload.matchTag.trim();
-      final DateTime createdAt = payload.createdAt;
-      final int titleIndex = _gameRecords.length + newRecords.length + 1;
-      String resolvedMatchId = '';
-      String resolvedMatchName = '';
-      if (isTwoPlayerSession) {
-        resolvedMatchId = payload.matchId.trim();
-        if (resolvedMatchId.isEmpty) {
-          resolvedMatchId = sessionMatchId;
-        }
-        if (resolvedMatchId.isEmpty) {
-          resolvedMatchId = 'match-${createdAt.microsecondsSinceEpoch}-$index';
-        }
-        resolvedMatchName = payload.matchName.trim();
-        if (resolvedMatchName.isEmpty &&
-            sessionMatchName.isNotEmpty &&
-            (payload.matchId.trim().isEmpty ||
-                payload.matchId.trim() == sessionMatchId)) {
-          resolvedMatchName = sessionMatchName;
-        }
-        if (resolvedMatchName.isEmpty) {
-          resolvedMatchName = generatedMatchNames.putIfAbsent(
-            resolvedMatchId,
-            () {
-              final String generated = _defaultMatchNameFor(
-                tcg: _selectedGame,
-                number: nextGeneratedMatchNumber,
-              );
-              nextGeneratedMatchNumber += 1;
-              return generated;
-            },
-          );
-        }
-      }
-      newRecords.add(
-        GameRecord(
-          id: '${createdAt.microsecondsSinceEpoch}-$index-${payload.hashCode}',
-          title: '$duelTitlePrefix $titleIndex',
-          createdAt: createdAt,
-          gameStage: normalizedStage,
-          notes: '',
-          lifePointHistory: normalizedHistory,
-          tcgKey: selectedTcgKey,
-          deckId: resolvedDeckId,
-          matchResult: normalizedResult,
-          opponentName: resolvedOpponentName,
-          deckName: resolvedDeckName,
-          playerOneName: _settings.playerOneName,
-          playerTwoName: resolvedOpponentName.isEmpty
-              ? _settings.playerTwoName
-              : resolvedOpponentName,
-          playerCount: normalizedPlayerCount,
-          matchId: resolvedMatchId,
-          matchName: resolvedMatchName,
-          matchFormat: resolvedMatchFormat,
-          opponentDeckId: resolvedOpponentDeckId,
-          opponentDeckName: resolvedOpponentDeckName,
-          matchTag: resolvedMatchTag,
-        ),
-      );
-    }
-
-    if (newRecords.isEmpty) {
-      setState(() {
-        _saveDebugStatus = 'no completed games to save';
-      });
-      await _persistState();
-      return;
-    }
-
-    setState(() {
-      _gameRecords = <GameRecord>[...newRecords, ..._gameRecords];
-      _gameRecords.sort((GameRecord a, GameRecord b) {
-        return b.createdAt.compareTo(a.createdAt);
-      });
-      _saveDebugStatus =
-          'saved ${newRecords.length} game(s); count=${_recordsForSelectedGame().length}';
-    });
-    await _persistState();
-    if (mounted) {
+    if (mounted && insertedCount > 0) {
       final int savedCount = _recordsForSelectedGame().length;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2199,7 +2464,7 @@ class _HomeScreenState extends State<HomeScreen> {
             txt.t(
               'home.savedGamesToast',
               params: <String, Object?>{
-                'count': newRecords.length,
+                'count': insertedCount,
                 'total': savedCount,
               },
             ),
@@ -3041,43 +3306,82 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
     return Column(children: rows);
   }
 
+  Widget _buildLayoutPreviewFrame({
+    required double height,
+    required Widget child,
+  }) {
+    return Container(
+      height: height,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF111111),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: child,
+    );
+  }
+
   Widget _buildLayoutPreviewTile({
     required String label,
     required int quarterTurns,
   }) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: const Color(0xFF171717),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-        ),
-        child: RotatedBox(
-          quarterTurns: quarterTurns,
-          child: Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.expand_less_rounded,
-                  size: 12,
-                  color: Colors.white.withValues(alpha: 0.85),
-                ),
-                const SizedBox(width: 3),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white.withValues(alpha: 0.85),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double shortestSide = min(
+          constraints.maxWidth,
+          constraints.maxHeight,
+        );
+        final double iconSize = shortestSide.clamp(10.0, 16.0);
+        final double fontSize = shortestSide < 26
+            ? 7.4
+            : (shortestSide < 38 ? 8.2 : 9.2);
+
+        return Container(
+          margin: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF171717),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: RotatedBox(
+              quarterTurns: quarterTurns,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 3,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.expand_less_rounded,
+                          size: iconSize,
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: fontSize,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white.withValues(alpha: 0.85),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -3158,14 +3462,8 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
       _ => 132,
     };
 
-    return Container(
+    return _buildLayoutPreviewFrame(
       height: previewHeight,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
       child: Column(
         children: [
           for (final _MtgLayoutRowSpec row in rows)
@@ -3176,14 +3474,8 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
   }
 
   Widget _buildThreePlayerStandardPreview() {
-    return Container(
+    return _buildLayoutPreviewFrame(
       height: 156,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
       child: Row(
         children: [
           Expanded(
@@ -3218,14 +3510,8 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
   }
 
   Widget _buildFourPlayerTablePreview() {
-    return Container(
+    return _buildLayoutPreviewFrame(
       height: 164,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
       child: Column(
         children: [
           Expanded(flex: 26, child: _buildPreviewRow(const <int?>[2])),
@@ -3267,14 +3553,8 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
   }
 
   Widget _buildFivePlayerStandardPreview() {
-    return Container(
+    return _buildLayoutPreviewFrame(
       height: 188,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -3330,14 +3610,8 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
   }
 
   Widget _buildFivePlayerTablePreview() {
-    return Container(
+    return _buildLayoutPreviewFrame(
       height: 188,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
       child: Column(
         children: [
           Expanded(
@@ -3390,14 +3664,8 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
   }
 
   Widget _buildSixPlayerStandardPreview() {
-    return Container(
+    return _buildLayoutPreviewFrame(
       height: 188,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -3460,14 +3728,8 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
   }
 
   Widget _buildSixPlayerTablePreview() {
-    return Container(
+    return _buildLayoutPreviewFrame(
       height: 196,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
       child: Column(
         children: [
           Expanded(flex: 24, child: _buildPreviewRow(const <int?>[3])),
@@ -3761,6 +4023,7 @@ class MtgDuelScreen extends StatefulWidget {
     this.availableDeckNames = const <String>[],
     this.availableDecks = const <SideboardDeck>[],
     this.initialDeckName = '',
+    this.onCheckpoint,
   });
 
   final AppSettings settings;
@@ -3770,6 +4033,7 @@ class MtgDuelScreen extends StatefulWidget {
   final List<String> availableDeckNames;
   final List<SideboardDeck> availableDecks;
   final String initialDeckName;
+  final DuelCheckpointCallback? onCheckpoint;
 
   @override
   State<MtgDuelScreen> createState() => _MtgDuelScreenState();
@@ -3790,7 +4054,9 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
 
   bool _isRollingDice = false;
   Timer? _diceRollTimer;
+  Timer? _diceResultTimer;
   int _diceRollTicks = 0;
+  bool _showDiceResults = false;
 
   late final List<String> _historyEntries;
   late final List<TwoPlayerLifeEvent> _twoPlayerLifeEvents;
@@ -3798,11 +4064,13 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
 
   String _opponentName = '';
   String _opponentDeckInUse = '';
+  String _selectedOpponentDeckId = '';
   String _matchFormat = '';
   String _matchTag = '';
   String _matchName = '';
   String _selectedGameStage = 'G1';
   String _deckInUse = '';
+  String _selectedDeckId = '';
   int _bo3Wins = 0;
   int _bo3Losses = 0;
   String _lastCompletedOpponentName = '';
@@ -3908,8 +4176,21 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     return '';
   }
 
-  SideboardDeck? _selectedDeckForGuide() {
-    final String normalizedDeck = _deckInUse.trim().toLowerCase();
+  SideboardDeck? _deckById(String deckId) {
+    final String trimmedId = deckId.trim();
+    if (trimmedId.isEmpty) {
+      return null;
+    }
+    for (final SideboardDeck deck in _sessionAvailableDecks) {
+      if (deck.id == trimmedId) {
+        return deck;
+      }
+    }
+    return null;
+  }
+
+  SideboardDeck? _deckByName(String deckName) {
+    final String normalizedDeck = deckName.trim().toLowerCase();
     if (normalizedDeck.isEmpty) {
       return null;
     }
@@ -3921,17 +4202,12 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     return null;
   }
 
+  SideboardDeck? _selectedDeckForGuide() {
+    return _deckById(_selectedDeckId) ?? _deckByName(_deckInUse);
+  }
+
   String _selectedDeckIdForHistory() {
-    final String normalizedDeck = _deckInUse.trim().toLowerCase();
-    if (normalizedDeck.isEmpty) {
-      return '';
-    }
-    for (final SideboardDeck deck in _sessionAvailableDecks) {
-      if (deck.name.trim().toLowerCase() == normalizedDeck) {
-        return deck.id;
-      }
-    }
-    return '';
+    return _selectedDeckForGuide()?.id ?? '';
   }
 
   String _deckIdByName(String deckName) {
@@ -3948,7 +4224,25 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
   }
 
   String _selectedOpponentDeckIdForHistory() {
-    return _deckIdByName(_opponentDeckInUse);
+    return _deckById(_selectedOpponentDeckId)?.id ??
+        _deckIdByName(_opponentDeckInUse);
+  }
+
+  bool _hasConfiguredSideboard(SideboardMatchup matchup) {
+    bool hasNamedCards(List<SideboardCardEntry> entries) {
+      for (final SideboardCardEntry entry in entries) {
+        if (entry.name.trim().isNotEmpty) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    return hasNamedCards(matchup.sideIn) || hasNamedCards(matchup.sideOut);
+  }
+
+  List<SideboardMatchup> _configuredMatchupsForGuide(SideboardDeck deck) {
+    return deck.matchups.where(_hasConfiguredSideboard).toList(growable: false);
   }
 
   String _formatSideboardEntries(List<SideboardCardEntry> entries) {
@@ -3967,8 +4261,24 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
   }
 
   Future<void> _openSideboardGuideDialog() async {
+    final AppStrings txt = context.txt;
     final SideboardDeck? deck = _selectedDeckForGuide();
     if (deck == null) {
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text(txt.t('sideboardGuide.dialogTitle')),
+            content: Text(txt.t('sideboardGuide.noDeckSelected')),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(txt.t('common.close')),
+              ),
+            ],
+          );
+        },
+      );
       return;
     }
     await showInfoTipOnce(
@@ -3978,13 +4288,18 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       bodyKey: 'info.sideboardGuide.body',
       icon: Icons.menu_book_rounded,
     );
+    if (!mounted) {
+      return;
+    }
 
     await showDialog<void>(
       context: context,
       builder: (BuildContext context) {
-        final bool hasMatchups = deck.matchups.isNotEmpty;
+        final List<SideboardMatchup> configuredMatchups =
+            _configuredMatchupsForGuide(deck);
+        final bool hasMatchups = configuredMatchups.isNotEmpty;
         return AlertDialog(
-          title: Text('${deck.name} - Sideboard Guide'),
+          title: Text('${deck.name} - ${txt.t('sideboardGuide.dialogTitle')}'),
           content: SizedBox(
             width: double.maxFinite,
             child: hasMatchups
@@ -3994,12 +4309,12 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                       children: [
                         for (
                           int index = 0;
-                          index < deck.matchups.length;
+                          index < configuredMatchups.length;
                           index += 1
                         ) ...[
                           if (index > 0) const SizedBox(height: 12),
                           Text(
-                            deck.matchups[index].name,
+                            configuredMatchups[index].name,
                             style: const TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 15,
@@ -4007,7 +4322,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Side In: ${_formatSideboardEntries(deck.matchups[index].sideIn)}',
+                            '${txt.t('sideboardGuide.sideIn')}: ${_formatSideboardEntries(configuredMatchups[index].sideIn)}',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.88),
                               height: 1.3,
@@ -4015,7 +4330,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Side Out: ${_formatSideboardEntries(deck.matchups[index].sideOut)}',
+                            '${txt.t('sideboardGuide.sideOut')}: ${_formatSideboardEntries(configuredMatchups[index].sideOut)}',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.88),
                               height: 1.3,
@@ -4025,12 +4340,12 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                       ],
                     ),
                   )
-                : const Text('No matchup plans saved for this deck yet.'),
+                : Text(txt.t('sideboardGuide.noPlansForDeck')),
           ),
           actions: [
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
+              child: Text(txt.t('common.close')),
             ),
           ],
         );
@@ -4105,6 +4420,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       _bo3Losses = 0;
       _opponentName = '';
       _opponentDeckInUse = '';
+      _selectedOpponentDeckId = '';
       _matchFormat = '';
       _matchTag = '';
       _matchName = '';
@@ -4192,6 +4508,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     unawaited(WakelockPlus.enable());
     _sessionAvailableDecks = List<SideboardDeck>.from(widget.availableDecks);
     _deckInUse = _resolveInitialDeckName();
+    _selectedDeckId = _selectedDeckForGuide()?.id ?? '';
     _matchFormat = _selectedDeckForGuide()?.format.trim() ?? '';
     _currentMatchId = 'match-${DateTime.now().microsecondsSinceEpoch}';
     _playerNames = List<String>.generate(
@@ -4348,9 +4665,20 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
 
   void _closeWithHistory({String matchResult = '', bool shouldSave = true}) {
     _diceRollTimer?.cancel();
+    _diceResultTimer?.cancel();
     for (int index = 0; index < widget.playerCount; index += 1) {
       _cancelPendingTimer(index);
     }
+    Navigator.of(context).pop(
+      _buildDuelResultPayload(matchResult: matchResult, shouldSave: shouldSave),
+    );
+  }
+
+  DuelResultPayload _buildDuelResultPayload({
+    String matchResult = '',
+    bool shouldSave = true,
+    bool includeCurrentGameIfNeeded = true,
+  }) {
     final String explicitMatchResult = matchResult.trim();
     final DuelCompletedGamePayload currentSnapshot = _buildCompletedGamePayload(
       matchResult: explicitMatchResult,
@@ -4362,7 +4690,8 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
         _completedGamesForSession,
       );
       final bool includeCurrentGame =
-          explicitMatchResult.isNotEmpty || _hasActiveGameProgress();
+          includeCurrentGameIfNeeded &&
+          (explicitMatchResult.isNotEmpty || _hasActiveGameProgress());
       if (includeCurrentGame) {
         gamesToSave.add(currentSnapshot);
       }
@@ -4370,25 +4699,23 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     final DuelCompletedGamePayload payloadSource = gamesToSave.isNotEmpty
         ? gamesToSave.last
         : currentSnapshot;
-    Navigator.of(context).pop(
-      DuelResultPayload(
-        lifePointHistory: List<String>.from(payloadSource.lifePointHistory),
-        gameStage: payloadSource.gameStage,
-        opponentName: payloadSource.opponentName,
-        deckId: payloadSource.deckId,
-        deckName: payloadSource.deckName,
-        opponentDeckId: payloadSource.opponentDeckId,
-        opponentDeckName: payloadSource.opponentDeckName,
-        matchFormat: payloadSource.matchFormat,
-        matchTag: payloadSource.matchTag,
-        matchResult: payloadSource.matchResult,
-        playerCount: widget.playerCount,
-        shouldSave: shouldSave && gamesToSave.isNotEmpty,
-        completedGames: gamesToSave,
-        createdDecks: List<SideboardDeck>.from(_createdDecksForSession),
-        matchId: widget.playerCount == 2 ? _currentMatchId : '',
-        matchName: _matchName.trim(),
-      ),
+    return DuelResultPayload(
+      lifePointHistory: List<String>.from(payloadSource.lifePointHistory),
+      gameStage: payloadSource.gameStage,
+      opponentName: payloadSource.opponentName,
+      deckId: payloadSource.deckId,
+      deckName: payloadSource.deckName,
+      opponentDeckId: payloadSource.opponentDeckId,
+      opponentDeckName: payloadSource.opponentDeckName,
+      matchFormat: payloadSource.matchFormat,
+      matchTag: payloadSource.matchTag,
+      matchResult: payloadSource.matchResult,
+      playerCount: widget.playerCount,
+      shouldSave: shouldSave && gamesToSave.isNotEmpty,
+      completedGames: gamesToSave,
+      createdDecks: List<SideboardDeck>.from(_createdDecksForSession),
+      matchId: widget.playerCount == 2 ? _currentMatchId : '',
+      matchName: _matchName.trim(),
     );
   }
 
@@ -4939,7 +5266,13 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
           (int index) => TextEditingController(text: _playerName(index)),
         );
     String stage = _selectedGameStage;
-    String selectedDeck = _deckInUse.trim();
+    String selectedDeckId = _selectedDeckIdForHistory();
+    if (selectedDeckId.isEmpty && _deckInUse.trim().isNotEmpty) {
+      selectedDeckId = _deckByName(_deckInUse)?.id ?? '';
+    }
+    if (selectedDeckId.isNotEmpty && _deckById(selectedDeckId) == null) {
+      selectedDeckId = '';
+    }
     String selectedFormat = _matchFormat.trim();
     String selectedOpponentDeckId = _selectedOpponentDeckIdForHistory();
 
@@ -4961,58 +5294,8 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       );
     }
 
-    SideboardDeck? deckById(String id) {
-      final String trimmedId = id.trim();
-      if (trimmedId.isEmpty) {
-        return null;
-      }
-      for (final SideboardDeck deck in _sessionAvailableDecks) {
-        if (deck.id == trimmedId) {
-          return deck;
-        }
-      }
-      return null;
-    }
-
-    SideboardDeck? deckByName(String name) {
-      final String normalized = name.trim().toLowerCase();
-      if (normalized.isEmpty) {
-        return null;
-      }
-      for (final SideboardDeck deck in _sessionAvailableDecks) {
-        if (deck.name.trim().toLowerCase() == normalized) {
-          return deck;
-        }
-      }
-      return null;
-    }
-
-    List<String> deckOptions() {
-      final Set<String> unique = <String>{};
-      final List<String> options = <String>[];
-      for (final SideboardDeck deck in _sessionAvailableDecks) {
-        final String trimmed = deck.name.trim();
-        final String key = trimmed.toLowerCase();
-        if (trimmed.isEmpty || unique.contains(key)) {
-          continue;
-        }
-        unique.add(key);
-        options.add(trimmed);
-      }
-      for (final String raw in widget.availableDeckNames) {
-        final String trimmed = raw.trim();
-        final String key = trimmed.toLowerCase();
-        if (trimmed.isEmpty || unique.contains(key)) {
-          continue;
-        }
-        unique.add(key);
-        options.add(trimmed);
-      }
-      if (selectedDeck.isNotEmpty &&
-          !unique.contains(selectedDeck.toLowerCase())) {
-        options.add(selectedDeck);
-      }
-      return options;
+    List<SideboardDeck> deckOptions() {
+      return _filterDecksByFormat(_sessionAvailableDecks, selectedFormat);
     }
 
     List<String> formatOptions() {
@@ -5035,40 +5318,41 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     }
 
     List<SideboardDeck> opponentDeckOptions() {
-      final String normalizedFormat = selectedFormat.trim().toLowerCase();
-      if (normalizedFormat.isEmpty) {
-        return _sessionAvailableDecks;
+      return _filterDecksByFormat(_sessionAvailableDecks, selectedFormat);
+    }
+
+    void normalizeSelectedDeck() {
+      if (selectedDeckId.isEmpty) {
+        return;
       }
-      return _sessionAvailableDecks
-          .where((SideboardDeck deck) {
-            return deck.format.trim().toLowerCase() == normalizedFormat;
-          })
-          .toList(growable: false);
+      final SideboardDeck? selectedDeck = _deckById(selectedDeckId);
+      if (selectedDeck == null ||
+          !_deckMatchesFormat(selectedDeck, selectedFormat)) {
+        selectedDeckId = '';
+      }
     }
 
     void normalizeSelectedOpponentDeck() {
       if (selectedOpponentDeckId.isEmpty) {
         return;
       }
-      final SideboardDeck? selectedOpponentDeck = deckById(
+      final SideboardDeck? selectedOpponentDeck = _deckById(
         selectedOpponentDeckId,
       );
       if (selectedOpponentDeck == null) {
         selectedOpponentDeckId = '';
         return;
       }
-      final String normalizedFormat = selectedFormat.trim().toLowerCase();
-      if (normalizedFormat.isNotEmpty &&
-          selectedOpponentDeck.format.trim().toLowerCase() !=
-              normalizedFormat) {
+      if (!_deckMatchesFormat(selectedOpponentDeck, selectedFormat)) {
         selectedOpponentDeckId = '';
       }
     }
 
     if (selectedOpponentDeckId.isEmpty &&
         _opponentDeckInUse.trim().isNotEmpty) {
-      selectedOpponentDeckId = deckByName(_opponentDeckInUse)?.id ?? '';
+      selectedOpponentDeckId = _deckByName(_opponentDeckInUse)?.id ?? '';
     }
+    normalizeSelectedDeck();
     normalizeSelectedOpponentDeck();
 
     final bool? shouldSave = await showDialog<bool>(
@@ -5143,12 +5427,14 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                             }
                             setDialogState(() {
                               selectedFormat = trimmed;
+                              normalizeSelectedDeck();
                               normalizeSelectedOpponentDeck();
                             });
                             return;
                           }
                           setDialogState(() {
                             selectedFormat = value.trim();
+                            normalizeSelectedDeck();
                             normalizeSelectedOpponentDeck();
                           });
                         },
@@ -5197,7 +5483,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                             if (trimmedName.isEmpty) {
                               return;
                             }
-                            final SideboardDeck? existing = deckByName(
+                            final SideboardDeck? existing = _deckByName(
                               trimmedName,
                             );
                             if (existing != null) {
@@ -5273,7 +5559,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      initialValue: selectedDeck,
+                      initialValue: selectedDeckId,
                       decoration: const InputDecoration(
                         labelText: 'Deck in use',
                         border: OutlineInputBorder(),
@@ -5284,10 +5570,10 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                           value: '',
                           child: Text('No deck'),
                         ),
-                        ...deckOptions().map((String deckName) {
+                        ...deckOptions().map((SideboardDeck deck) {
                           return DropdownMenuItem<String>(
-                            value: deckName,
-                            child: Text(deckName),
+                            value: deck.id,
+                            child: Text(deck.name),
                           );
                         }),
                       ],
@@ -5296,18 +5582,19 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                           return;
                         }
                         setDialogState(() {
-                          selectedDeck = value;
-                          if (selectedDeck.isEmpty) {
+                          selectedDeckId = value.trim();
+                          if (selectedDeckId.isEmpty) {
                             return;
                           }
-                          final SideboardDeck? linkedDeck = deckByName(
-                            selectedDeck,
+                          final SideboardDeck? linkedDeck = _deckById(
+                            selectedDeckId,
                           );
                           if (linkedDeck != null &&
                               selectedFormat.trim().isEmpty &&
                               linkedDeck.format.trim().isNotEmpty) {
                             selectedFormat = linkedDeck.format.trim();
                           }
+                          normalizeSelectedDeck();
                           normalizeSelectedOpponentDeck();
                         });
                       },
@@ -5375,16 +5662,19 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       _matchName = matchNameController.text.trim();
       _opponentName = opponentController.text.trim();
       _matchFormat = selectedFormat.trim();
-      final SideboardDeck? selectedOpponentDeck = deckById(
+      final SideboardDeck? selectedDeckObject = _deckById(selectedDeckId);
+      final SideboardDeck? selectedOpponentDeck = _deckById(
         selectedOpponentDeckId,
       );
+      _selectedOpponentDeckId = selectedOpponentDeck?.id ?? '';
       _opponentDeckInUse = selectedOpponentDeck?.name ?? '';
       _matchTag = tagController.text.trim();
       if (_opponentName.isNotEmpty) {
         _lastCompletedOpponentName = _opponentName;
         _lastRecordedOpponentName = _opponentName;
       }
-      _deckInUse = selectedDeck.trim();
+      _selectedDeckId = selectedDeckObject?.id ?? '';
+      _deckInUse = selectedDeckObject?.name ?? '';
       _selectedGameStage = stage;
       if (widget.playerCount == 2 && stage == 'G1') {
         _bo3Wins = 0;
@@ -5418,11 +5708,14 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     const int totalTicks = 12;
     const Duration tickDuration = Duration(milliseconds: 85);
     _diceRollTimer?.cancel();
+    _diceResultTimer?.cancel();
+    _diceResultTimer = null;
     setState(() {
       _isRollingDice = true;
       _diceRollTicks = 0;
+      _showDiceResults = true;
       for (int index = 0; index < widget.playerCount; index += 1) {
-        _diceValues[index] = _random.nextInt(6) + 1;
+        _diceValues[index] = _nextDieValue(_random);
       }
     });
 
@@ -5431,17 +5724,38 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
         timer.cancel();
         return;
       }
+      bool shouldStop = false;
       setState(() {
         for (int index = 0; index < widget.playerCount; index += 1) {
-          _diceValues[index] = _random.nextInt(6) + 1;
+          _diceValues[index] = _nextDieValue(_random);
         }
         _diceRollTicks += 1;
         if (_diceRollTicks >= totalTicks) {
           _isRollingDice = false;
-          timer.cancel();
-          _diceRollTimer = null;
+          shouldStop = true;
         }
       });
+      if (shouldStop) {
+        timer.cancel();
+        _diceRollTimer = null;
+        _scheduleDiceResultDismissal();
+      }
+    });
+  }
+
+  void _scheduleDiceResultDismissal() {
+    _diceResultTimer?.cancel();
+    _diceResultTimer = Timer(_diceResultVisibilityDuration, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showDiceResults = false;
+        for (int index = 0; index < widget.playerCount; index += 1) {
+          _diceValues[index] = null;
+        }
+      });
+      _diceResultTimer = null;
     });
   }
 
@@ -5451,8 +5765,6 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     const Color winColor = Color(0xFF163825);
     const Color lossColor = Color(0xFF4A1E1E);
     const Color drawColor = Color(0xFF4D4220);
-    final bool canOpenSideboardGuide = _selectedDeckForGuide() != null;
-
     final String? action = await showDialog<String>(
       context: context,
       builder: (BuildContext context) {
@@ -5471,9 +5783,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                 const SizedBox(height: 8),
               ],
               FilledButton.tonal(
-                onPressed: canOpenSideboardGuide
-                    ? () => Navigator.of(context).pop('sideboard')
-                    : null,
+                onPressed: () => Navigator.of(context).pop('sideboard'),
                 style: FilledButton.styleFrom(
                   backgroundColor: widget.settings.buttonColor,
                 ),
@@ -5484,7 +5794,11 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                 onPressed: () => Navigator.of(context).pop('reset'),
                 style: FilledButton.styleFrom(backgroundColor: resetColor),
                 child: Text(
-                  fromHome ? 'Exit without saving' : 'Reset without saving',
+                  fromHome
+                      ? (_completedGamesForSession.isNotEmpty
+                            ? 'Discard current game and exit'
+                            : 'Exit without saving')
+                      : 'Reset without saving',
                 ),
               ),
               const SizedBox(height: 8),
@@ -5535,6 +5849,8 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
 
       _diceRollTimer?.cancel();
       _diceRollTimer = null;
+      _diceResultTimer?.cancel();
+      _diceResultTimer = null;
       for (int index = 0; index < widget.playerCount; index += 1) {
         _cancelPendingTimer(index);
       }
@@ -5569,6 +5885,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
         }
         _isRollingDice = false;
         _diceRollTicks = 0;
+        _showDiceResults = false;
         _twoPlayerLifeEvents.clear();
         _historyEntries
           ..clear()
@@ -5580,6 +5897,13 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
             ),
           );
       });
+      final DuelResultPayload checkpointPayload = _buildDuelResultPayload(
+        shouldSave: true,
+        includeCurrentGameIfNeeded: false,
+      );
+      if (widget.onCheckpoint != null) {
+        await widget.onCheckpoint!(checkpointPayload);
+      }
       return;
     }
     if (action != 'reset') {
@@ -5592,6 +5916,8 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
 
     _diceRollTimer?.cancel();
     _diceRollTimer = null;
+    _diceResultTimer?.cancel();
+    _diceResultTimer = null;
     for (int index = 0; index < widget.playerCount; index += 1) {
       _cancelPendingTimer(index);
     }
@@ -5618,6 +5944,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       }
       _isRollingDice = false;
       _diceRollTicks = 0;
+      _showDiceResults = false;
       _twoPlayerLifeEvents.clear();
       _historyEntries
         ..clear()
@@ -5673,9 +6000,11 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     int value, {
     required bool compact,
     required bool isRolling,
+    bool prominent = false,
   }) {
-    final double size = compact ? 22 : 28;
-    final double pipSize = compact ? 3.1 : 3.8;
+    final double size = prominent ? (compact ? 34 : 42) : (compact ? 26 : 32);
+    final double pipSize = prominent ? size * 0.16 : size * 0.145;
+    final double inset = prominent ? size * 0.14 : size * 0.13;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 80),
@@ -5683,14 +6012,14 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       height: size,
       decoration: BoxDecoration(
         color: isRolling ? const Color(0xFFFFE9B3) : const Color(0xFFEEEDED),
-        borderRadius: BorderRadius.circular(compact ? 6 : 8),
+        borderRadius: BorderRadius.circular(prominent ? 12 : (compact ? 7 : 9)),
         border: Border.all(
           color: isRolling ? const Color(0xFFE7C061) : const Color(0xFFB0AFAF),
-          width: isRolling ? 1.6 : 1,
+          width: prominent ? (isRolling ? 1.9 : 1.2) : (isRolling ? 1.6 : 1),
         ),
       ),
       child: Padding(
-        padding: EdgeInsets.all(compact ? 3 : 4),
+        padding: EdgeInsets.all(inset),
         child: Stack(
           children: [
             for (final Alignment align in _diePipAlignments(value))
@@ -5708,6 +6037,49 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAnimatedDieResult({required int value, required bool compact}) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutBack,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.88, end: 1).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: !_showDiceResults
+          ? const SizedBox.shrink(key: ValueKey<String>('dice-hidden'))
+          : Container(
+              key: ValueKey<String>(
+                'dice-$value-${compact ? 'compact' : 'regular'}-${_isRollingDice ? 'rolling' : 'final'}',
+              ),
+              padding: EdgeInsets.all(compact ? 4 : 5),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.24),
+                borderRadius: BorderRadius.circular(compact ? 14 : 18),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.28),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: _buildDieFace(
+                value,
+                compact: compact,
+                isRolling: _isRollingDice,
+                prominent: true,
+              ),
+            ),
     );
   }
 
@@ -5835,6 +6207,8 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     required bool longSide,
   }) {
     final int? dieValue = _diceValues[playerIndex];
+    final bool showDieResult = _showDiceResults && dieValue != null;
+    final int dieResultValue = dieValue ?? 0;
     final int lifePoints = _lifePoints[playerIndex];
     final int poisonCounters = _poisonCountersForPlayer(playerIndex);
     final int experienceCounters = _experienceCountersForPlayer(playerIndex);
@@ -6137,22 +6511,19 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
         ),
         Positioned(
           right: 0,
-          top: dieValue != null ? (dense ? 28 : 34) : (dense ? 2 : 4),
+          top: showDieResult ? (dense ? 40 : 48) : (dense ? 2 : 4),
           child: _buildPendingDeltaBadge(
             playerIndex: playerIndex,
             compact: dense,
           ),
         ),
-        if (dieValue != null)
-          Positioned(
-            right: 0,
-            top: dense ? 0 : 2,
-            child: _buildDieFace(
-              dieValue,
-              compact: true,
-              isRolling: _isRollingDice,
-            ),
-          ),
+        Positioned(
+          right: 0,
+          top: dense ? 0 : 2,
+          child: showDieResult
+              ? _buildAnimatedDieResult(value: dieResultValue, compact: true)
+              : const SizedBox.shrink(),
+        ),
         if (longSide && statusFragments.isNotEmpty)
           Positioned(
             left: dense ? 6 : 8,
@@ -6364,11 +6735,9 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                       ),
                       const SizedBox(width: spacing),
                       controlButton(
-                        onPressed: _selectedDeckForGuide() == null
-                            ? null
-                            : () {
-                                unawaited(_openSideboardGuideDialog());
-                              },
+                        onPressed: () {
+                          unawaited(_openSideboardGuideDialog());
+                        },
                         icon: const Icon(Icons.menu_book_outlined, size: 28),
                       ),
                       const SizedBox(width: spacing),
@@ -7062,7 +7431,6 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       context: context,
       barrierDismissible: true,
       builder: (BuildContext dialogContext) {
-        final bool canOpenSideboardGuide = _selectedDeckForGuide() != null;
         Widget menuButton({
           required String label,
           required IconData icon,
@@ -7129,12 +7497,10 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                 menuButton(
                   label: 'Sideboard',
                   icon: Icons.menu_book_outlined,
-                  onPressed: canOpenSideboardGuide
-                      ? () {
-                          Navigator.of(dialogContext).pop();
-                          _openSideboardGuideDialog();
-                        }
-                      : null,
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    _openSideboardGuideDialog();
+                  },
                 ),
                 const SizedBox(height: 8),
                 menuButton(
@@ -7219,6 +7585,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
   void dispose() {
     unawaited(WakelockPlus.disable());
     _diceRollTimer?.cancel();
+    _diceResultTimer?.cancel();
     for (int index = 0; index < _pendingTimers.length; index += 1) {
       _pendingTimers[index]?.cancel();
     }
@@ -7235,6 +7602,7 @@ class DuelScreen extends StatefulWidget {
     this.availableDeckNames = const <String>[],
     this.availableDecks = const <SideboardDeck>[],
     this.initialDeckName = '',
+    this.onCheckpoint,
   });
 
   final AppSettings settings;
@@ -7243,6 +7611,7 @@ class DuelScreen extends StatefulWidget {
   final List<String> availableDeckNames;
   final List<SideboardDeck> availableDecks;
   final String initialDeckName;
+  final DuelCheckpointCallback? onCheckpoint;
 
   @override
   State<DuelScreen> createState() => _DuelScreenState();
@@ -7265,7 +7634,9 @@ class _DuelScreenState extends State<DuelScreen> {
   int _playerTwoPendingDelta = 0;
 
   Timer? _diceRollTimer;
+  Timer? _diceResultTimer;
   int _diceRollTicks = 0;
+  bool _showDiceResults = false;
   Timer? _playerOnePendingTimer;
   Timer? _playerTwoPendingTimer;
 
@@ -7278,11 +7649,13 @@ class _DuelScreenState extends State<DuelScreen> {
 
   String _opponentName = '';
   String _opponentDeckInUse = '';
+  String _selectedOpponentDeckId = '';
   String _matchFormat = '';
   String _matchTag = '';
   String _matchName = '';
   String _selectedGameStage = 'G1';
   String _deckInUse = '';
+  String _selectedDeckId = '';
   int _bo3Wins = 0;
   int _bo3Losses = 0;
   String _lastCompletedOpponentName = '';
@@ -7329,8 +7702,21 @@ class _DuelScreenState extends State<DuelScreen> {
     return '';
   }
 
-  SideboardDeck? _selectedDeckForGuide() {
-    final String normalizedDeck = _deckInUse.trim().toLowerCase();
+  SideboardDeck? _deckById(String deckId) {
+    final String trimmedId = deckId.trim();
+    if (trimmedId.isEmpty) {
+      return null;
+    }
+    for (final SideboardDeck deck in _sessionAvailableDecks) {
+      if (deck.id == trimmedId) {
+        return deck;
+      }
+    }
+    return null;
+  }
+
+  SideboardDeck? _deckByName(String deckName) {
+    final String normalizedDeck = deckName.trim().toLowerCase();
     if (normalizedDeck.isEmpty) {
       return null;
     }
@@ -7342,17 +7728,12 @@ class _DuelScreenState extends State<DuelScreen> {
     return null;
   }
 
+  SideboardDeck? _selectedDeckForGuide() {
+    return _deckById(_selectedDeckId) ?? _deckByName(_deckInUse);
+  }
+
   String _selectedDeckIdForHistory() {
-    final String normalizedDeck = _deckInUse.trim().toLowerCase();
-    if (normalizedDeck.isEmpty) {
-      return '';
-    }
-    for (final SideboardDeck deck in _sessionAvailableDecks) {
-      if (deck.name.trim().toLowerCase() == normalizedDeck) {
-        return deck.id;
-      }
-    }
-    return '';
+    return _selectedDeckForGuide()?.id ?? '';
   }
 
   String _deckIdByName(String deckName) {
@@ -7369,7 +7750,25 @@ class _DuelScreenState extends State<DuelScreen> {
   }
 
   String _selectedOpponentDeckIdForHistory() {
-    return _deckIdByName(_opponentDeckInUse);
+    return _deckById(_selectedOpponentDeckId)?.id ??
+        _deckIdByName(_opponentDeckInUse);
+  }
+
+  bool _hasConfiguredSideboard(SideboardMatchup matchup) {
+    bool hasNamedCards(List<SideboardCardEntry> entries) {
+      for (final SideboardCardEntry entry in entries) {
+        if (entry.name.trim().isNotEmpty) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    return hasNamedCards(matchup.sideIn) || hasNamedCards(matchup.sideOut);
+  }
+
+  List<SideboardMatchup> _configuredMatchupsForGuide(SideboardDeck deck) {
+    return deck.matchups.where(_hasConfiguredSideboard).toList(growable: false);
   }
 
   String _formatSideboardEntries(List<SideboardCardEntry> entries) {
@@ -7388,8 +7787,24 @@ class _DuelScreenState extends State<DuelScreen> {
   }
 
   Future<void> _openSideboardGuideDialog() async {
+    final AppStrings txt = context.txt;
     final SideboardDeck? deck = _selectedDeckForGuide();
     if (deck == null) {
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text(txt.t('sideboardGuide.dialogTitle')),
+            content: Text(txt.t('sideboardGuide.noDeckSelected')),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(txt.t('common.close')),
+              ),
+            ],
+          );
+        },
+      );
       return;
     }
     await showInfoTipOnce(
@@ -7399,13 +7814,18 @@ class _DuelScreenState extends State<DuelScreen> {
       bodyKey: 'info.sideboardGuide.body',
       icon: Icons.menu_book_rounded,
     );
+    if (!mounted) {
+      return;
+    }
 
     await showDialog<void>(
       context: context,
       builder: (BuildContext context) {
-        final bool hasMatchups = deck.matchups.isNotEmpty;
+        final List<SideboardMatchup> configuredMatchups =
+            _configuredMatchupsForGuide(deck);
+        final bool hasMatchups = configuredMatchups.isNotEmpty;
         return AlertDialog(
-          title: Text('${deck.name} - Sideboard Guide'),
+          title: Text('${deck.name} - ${txt.t('sideboardGuide.dialogTitle')}'),
           content: SizedBox(
             width: double.maxFinite,
             child: hasMatchups
@@ -7415,12 +7835,12 @@ class _DuelScreenState extends State<DuelScreen> {
                       children: [
                         for (
                           int index = 0;
-                          index < deck.matchups.length;
+                          index < configuredMatchups.length;
                           index += 1
                         ) ...[
                           if (index > 0) const SizedBox(height: 12),
                           Text(
-                            deck.matchups[index].name,
+                            configuredMatchups[index].name,
                             style: const TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 15,
@@ -7428,7 +7848,7 @@ class _DuelScreenState extends State<DuelScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Side In: ${_formatSideboardEntries(deck.matchups[index].sideIn)}',
+                            '${txt.t('sideboardGuide.sideIn')}: ${_formatSideboardEntries(configuredMatchups[index].sideIn)}',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.88),
                               height: 1.3,
@@ -7436,7 +7856,7 @@ class _DuelScreenState extends State<DuelScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Side Out: ${_formatSideboardEntries(deck.matchups[index].sideOut)}',
+                            '${txt.t('sideboardGuide.sideOut')}: ${_formatSideboardEntries(configuredMatchups[index].sideOut)}',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.88),
                               height: 1.3,
@@ -7446,12 +7866,12 @@ class _DuelScreenState extends State<DuelScreen> {
                       ],
                     ),
                   )
-                : const Text('No matchup plans saved for this deck yet.'),
+                : Text(txt.t('sideboardGuide.noPlansForDeck')),
           ),
           actions: [
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
+              child: Text(txt.t('common.close')),
             ),
           ],
         );
@@ -7516,6 +7936,7 @@ class _DuelScreenState extends State<DuelScreen> {
       _bo3Losses = 0;
       _opponentName = '';
       _opponentDeckInUse = '';
+      _selectedOpponentDeckId = '';
       _matchFormat = '';
       _matchTag = '';
       _matchName = '';
@@ -7591,28 +8012,13 @@ class _DuelScreenState extends State<DuelScreen> {
     );
   }
 
-  List<String> _deckOptionsForDetails() {
-    final List<String> options = <String>[];
-    for (final String raw in widget.availableDeckNames) {
-      final String trimmed = raw.trim();
-      if (trimmed.isEmpty || options.contains(trimmed)) {
-        continue;
-      }
-      options.add(trimmed);
-    }
-    final String current = _deckInUse.trim();
-    if (current.isNotEmpty && !options.contains(current)) {
-      options.add(current);
-    }
-    return options;
-  }
-
   @override
   void initState() {
     super.initState();
     unawaited(WakelockPlus.enable());
     _sessionAvailableDecks = List<SideboardDeck>.from(widget.availableDecks);
     _deckInUse = _resolveInitialDeckName();
+    _selectedDeckId = _selectedDeckForGuide()?.id ?? '';
     _matchFormat = _selectedDeckForGuide()?.format.trim() ?? '';
     _currentMatchId = 'match-${DateTime.now().microsecondsSinceEpoch}';
     _playerOneLp = widget.initialLifePoints;
@@ -8216,8 +8622,19 @@ class _DuelScreenState extends State<DuelScreen> {
 
   void _closeWithHistory({String matchResult = '', bool shouldSave = true}) {
     _diceRollTimer?.cancel();
+    _diceResultTimer?.cancel();
     _cancelPendingTimer(1);
     _cancelPendingTimer(2);
+    Navigator.of(context).pop(
+      _buildDuelResultPayload(matchResult: matchResult, shouldSave: shouldSave),
+    );
+  }
+
+  DuelResultPayload _buildDuelResultPayload({
+    String matchResult = '',
+    bool shouldSave = true,
+    bool includeCurrentGameIfNeeded = true,
+  }) {
     final String explicitMatchResult = matchResult.trim();
     final DuelCompletedGamePayload currentSnapshot = _buildCompletedGamePayload(
       matchResult: explicitMatchResult,
@@ -8229,7 +8646,8 @@ class _DuelScreenState extends State<DuelScreen> {
         _completedGamesForSession,
       );
       final bool includeCurrentGame =
-          explicitMatchResult.isNotEmpty || _hasActiveGameProgress();
+          includeCurrentGameIfNeeded &&
+          (explicitMatchResult.isNotEmpty || _hasActiveGameProgress());
       if (includeCurrentGame) {
         gamesToSave.add(currentSnapshot);
       }
@@ -8237,25 +8655,23 @@ class _DuelScreenState extends State<DuelScreen> {
     final DuelCompletedGamePayload payloadSource = gamesToSave.isNotEmpty
         ? gamesToSave.last
         : currentSnapshot;
-    Navigator.of(context).pop(
-      DuelResultPayload(
-        lifePointHistory: List<String>.from(payloadSource.lifePointHistory),
-        gameStage: payloadSource.gameStage,
-        opponentName: payloadSource.opponentName,
-        deckId: payloadSource.deckId,
-        deckName: payloadSource.deckName,
-        opponentDeckId: payloadSource.opponentDeckId,
-        opponentDeckName: payloadSource.opponentDeckName,
-        matchFormat: payloadSource.matchFormat,
-        matchTag: payloadSource.matchTag,
-        matchResult: payloadSource.matchResult,
-        playerCount: 2,
-        shouldSave: shouldSave && gamesToSave.isNotEmpty,
-        completedGames: gamesToSave,
-        createdDecks: List<SideboardDeck>.from(_createdDecksForSession),
-        matchId: _currentMatchId,
-        matchName: _matchName.trim(),
-      ),
+    return DuelResultPayload(
+      lifePointHistory: List<String>.from(payloadSource.lifePointHistory),
+      gameStage: payloadSource.gameStage,
+      opponentName: payloadSource.opponentName,
+      deckId: payloadSource.deckId,
+      deckName: payloadSource.deckName,
+      opponentDeckId: payloadSource.opponentDeckId,
+      opponentDeckName: payloadSource.opponentDeckName,
+      matchFormat: payloadSource.matchFormat,
+      matchTag: payloadSource.matchTag,
+      matchResult: payloadSource.matchResult,
+      playerCount: 2,
+      shouldSave: shouldSave && gamesToSave.isNotEmpty,
+      completedGames: gamesToSave,
+      createdDecks: List<SideboardDeck>.from(_createdDecksForSession),
+      matchId: _currentMatchId,
+      matchName: _matchName.trim(),
     );
   }
 
@@ -8534,10 +8950,12 @@ class _DuelScreenState extends State<DuelScreen> {
       text: _matchTag,
     );
     String stage = _selectedGameStage;
-    final List<String> deckOptions = _deckOptionsForDetails();
-    String selectedDeck = _deckInUse.trim();
-    if (selectedDeck.isNotEmpty && !deckOptions.contains(selectedDeck)) {
-      selectedDeck = '';
+    String selectedDeckId = _selectedDeckIdForHistory();
+    if (selectedDeckId.isEmpty && _deckInUse.trim().isNotEmpty) {
+      selectedDeckId = _deckByName(_deckInUse)?.id ?? '';
+    }
+    if (selectedDeckId.isNotEmpty && _deckById(selectedDeckId) == null) {
+      selectedDeckId = '';
     }
     String selectedFormat = _matchFormat.trim();
     String selectedOpponentDeckId = _selectedOpponentDeckIdForHistory();
@@ -8560,32 +8978,6 @@ class _DuelScreenState extends State<DuelScreen> {
       );
     }
 
-    SideboardDeck? deckById(String id) {
-      final String trimmedId = id.trim();
-      if (trimmedId.isEmpty) {
-        return null;
-      }
-      for (final SideboardDeck deck in _sessionAvailableDecks) {
-        if (deck.id == trimmedId) {
-          return deck;
-        }
-      }
-      return null;
-    }
-
-    SideboardDeck? deckByName(String name) {
-      final String normalized = name.trim().toLowerCase();
-      if (normalized.isEmpty) {
-        return null;
-      }
-      for (final SideboardDeck deck in _sessionAvailableDecks) {
-        if (deck.name.trim().toLowerCase() == normalized) {
-          return deck;
-        }
-      }
-      return null;
-    }
-
     List<String> formatOptions() {
       final Set<String> unique = <String>{};
       for (final SideboardDeck deck in _sessionAvailableDecks) {
@@ -8604,41 +8996,46 @@ class _DuelScreenState extends State<DuelScreen> {
       return sorted;
     }
 
+    List<SideboardDeck> deckOptions() {
+      return _filterDecksByFormat(_sessionAvailableDecks, selectedFormat);
+    }
+
     List<SideboardDeck> opponentDeckOptions() {
-      final String normalizedFormat = selectedFormat.trim().toLowerCase();
-      if (normalizedFormat.isEmpty) {
-        return _sessionAvailableDecks;
+      return _filterDecksByFormat(_sessionAvailableDecks, selectedFormat);
+    }
+
+    void normalizeSelectedDeck() {
+      if (selectedDeckId.isEmpty) {
+        return;
       }
-      return _sessionAvailableDecks
-          .where((SideboardDeck deck) {
-            return deck.format.trim().toLowerCase() == normalizedFormat;
-          })
-          .toList(growable: false);
+      final SideboardDeck? selectedDeck = _deckById(selectedDeckId);
+      if (selectedDeck == null ||
+          !_deckMatchesFormat(selectedDeck, selectedFormat)) {
+        selectedDeckId = '';
+      }
     }
 
     void normalizeSelectedOpponentDeck() {
       if (selectedOpponentDeckId.isEmpty) {
         return;
       }
-      final SideboardDeck? selectedOpponentDeck = deckById(
+      final SideboardDeck? selectedOpponentDeck = _deckById(
         selectedOpponentDeckId,
       );
       if (selectedOpponentDeck == null) {
         selectedOpponentDeckId = '';
         return;
       }
-      final String normalizedFormat = selectedFormat.trim().toLowerCase();
-      if (normalizedFormat.isNotEmpty &&
-          selectedOpponentDeck.format.trim().toLowerCase() !=
-              normalizedFormat) {
+      if (!_deckMatchesFormat(selectedOpponentDeck, selectedFormat)) {
         selectedOpponentDeckId = '';
       }
     }
 
     if (selectedOpponentDeckId.isEmpty &&
         _opponentDeckInUse.trim().isNotEmpty) {
-      selectedOpponentDeckId = deckByName(_opponentDeckInUse)?.id ?? '';
+      selectedOpponentDeckId = _deckByName(_opponentDeckInUse)?.id ?? '';
     }
+    normalizeSelectedDeck();
     normalizeSelectedOpponentDeck();
 
     final bool? shouldSave = await showDialog<bool>(
@@ -8712,12 +9109,14 @@ class _DuelScreenState extends State<DuelScreen> {
                           }
                           setDialogState(() {
                             selectedFormat = trimmed;
+                            normalizeSelectedDeck();
                             normalizeSelectedOpponentDeck();
                           });
                           return;
                         }
                         setDialogState(() {
                           selectedFormat = value.trim();
+                          normalizeSelectedDeck();
                           normalizeSelectedOpponentDeck();
                         });
                       },
@@ -8766,7 +9165,7 @@ class _DuelScreenState extends State<DuelScreen> {
                           if (trimmedName.isEmpty) {
                             return;
                           }
-                          final SideboardDeck? existing = deckByName(
+                          final SideboardDeck? existing = _deckByName(
                             trimmedName,
                           );
                           if (existing != null) {
@@ -8843,7 +9242,7 @@ class _DuelScreenState extends State<DuelScreen> {
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      initialValue: selectedDeck,
+                      initialValue: selectedDeckId,
                       decoration: const InputDecoration(
                         labelText: 'Deck in use',
                         border: OutlineInputBorder(),
@@ -8854,10 +9253,10 @@ class _DuelScreenState extends State<DuelScreen> {
                           value: '',
                           child: Text('No deck'),
                         ),
-                        ...deckOptions.map((String deckName) {
+                        ...deckOptions().map((SideboardDeck deck) {
                           return DropdownMenuItem<String>(
-                            value: deckName,
-                            child: Text(deckName),
+                            value: deck.id,
+                            child: Text(deck.name),
                           );
                         }),
                       ],
@@ -8866,18 +9265,19 @@ class _DuelScreenState extends State<DuelScreen> {
                           return;
                         }
                         setDialogState(() {
-                          selectedDeck = value;
-                          if (selectedDeck.isEmpty) {
+                          selectedDeckId = value.trim();
+                          if (selectedDeckId.isEmpty) {
                             return;
                           }
-                          final SideboardDeck? linkedDeck = deckByName(
-                            selectedDeck,
+                          final SideboardDeck? linkedDeck = _deckById(
+                            selectedDeckId,
                           );
                           if (linkedDeck != null &&
                               selectedFormat.trim().isEmpty &&
                               linkedDeck.format.trim().isNotEmpty) {
                             selectedFormat = linkedDeck.format.trim();
                           }
+                          normalizeSelectedDeck();
                           normalizeSelectedOpponentDeck();
                         });
                       },
@@ -8911,9 +9311,11 @@ class _DuelScreenState extends State<DuelScreen> {
     setState(() {
       _matchName = matchNameController.text.trim();
       _opponentName = opponentController.text.trim();
-      final SideboardDeck? selectedOpponentDeck = deckById(
+      final SideboardDeck? selectedDeckObject = _deckById(selectedDeckId);
+      final SideboardDeck? selectedOpponentDeck = _deckById(
         selectedOpponentDeckId,
       );
+      _selectedOpponentDeckId = selectedOpponentDeck?.id ?? '';
       _opponentDeckInUse = selectedOpponentDeck?.name ?? '';
       _matchFormat = selectedFormat.trim();
       _matchTag = tagController.text.trim();
@@ -8921,7 +9323,8 @@ class _DuelScreenState extends State<DuelScreen> {
         _lastCompletedOpponentName = _opponentName;
         _lastRecordedOpponentName = _opponentName;
       }
-      _deckInUse = selectedDeck.trim();
+      _selectedDeckId = selectedDeckObject?.id ?? '';
+      _deckInUse = selectedDeckObject?.name ?? '';
       _selectedGameStage = stage;
       if (stage == 'G1') {
         _bo3Wins = 0;
@@ -8939,8 +9342,6 @@ class _DuelScreenState extends State<DuelScreen> {
     const Color winColor = Color(0xFF163825);
     const Color lossColor = Color(0xFF4A1E1E);
     const Color drawColor = Color(0xFF4D4220);
-    final bool canOpenSideboardGuide = _selectedDeckForGuide() != null;
-
     final String? action = await showDialog<String>(
       context: context,
       builder: (BuildContext context) {
@@ -8959,9 +9360,7 @@ class _DuelScreenState extends State<DuelScreen> {
                 const SizedBox(height: 8),
               ],
               FilledButton.tonal(
-                onPressed: canOpenSideboardGuide
-                    ? () => Navigator.of(context).pop('sideboard')
-                    : null,
+                onPressed: () => Navigator.of(context).pop('sideboard'),
                 style: FilledButton.styleFrom(
                   backgroundColor: widget.settings.buttonColor,
                 ),
@@ -8972,7 +9371,11 @@ class _DuelScreenState extends State<DuelScreen> {
                 onPressed: () => Navigator.of(context).pop('reset'),
                 style: FilledButton.styleFrom(backgroundColor: resetColor),
                 child: Text(
-                  fromHome ? 'Exit without saving' : 'Reset without saving',
+                  fromHome
+                      ? (_completedGamesForSession.isNotEmpty
+                            ? 'Discard current game and exit'
+                            : 'Exit without saving')
+                      : 'Reset without saving',
                 ),
               ),
               const SizedBox(height: 8),
@@ -9019,6 +9422,8 @@ class _DuelScreenState extends State<DuelScreen> {
     if (action == 'Win' || action == 'Loss' || action == 'Draw') {
       _diceRollTimer?.cancel();
       _diceRollTimer = null;
+      _diceResultTimer?.cancel();
+      _diceResultTimer = null;
       _cancelPendingTimer(1);
       _cancelPendingTimer(2);
 
@@ -9038,6 +9443,7 @@ class _DuelScreenState extends State<DuelScreen> {
         _playerTwoDie = null;
         _isRollingDice = false;
         _diceRollTicks = 0;
+        _showDiceResults = false;
         _playerOnePendingDelta = 0;
         _playerTwoPendingDelta = 0;
         for (final _MtgResourceCounter counter in _MtgResourceCounter.values) {
@@ -9050,6 +9456,13 @@ class _DuelScreenState extends State<DuelScreen> {
         }
         _twoPlayerLifeEvents.clear();
       });
+      final DuelResultPayload checkpointPayload = _buildDuelResultPayload(
+        shouldSave: true,
+        includeCurrentGameIfNeeded: false,
+      );
+      if (widget.onCheckpoint != null) {
+        await widget.onCheckpoint!(checkpointPayload);
+      }
       return;
     }
     if (action != 'reset') {
@@ -9062,6 +9475,8 @@ class _DuelScreenState extends State<DuelScreen> {
 
     _diceRollTimer?.cancel();
     _diceRollTimer = null;
+    _diceResultTimer?.cancel();
+    _diceResultTimer = null;
     _cancelPendingTimer(1);
     _cancelPendingTimer(2);
 
@@ -9074,6 +9489,7 @@ class _DuelScreenState extends State<DuelScreen> {
       _playerTwoDie = null;
       _isRollingDice = false;
       _diceRollTicks = 0;
+      _showDiceResults = false;
       _playerOnePendingDelta = 0;
       _playerTwoPendingDelta = 0;
       for (final _MtgResourceCounter counter in _MtgResourceCounter.values) {
@@ -9097,11 +9513,14 @@ class _DuelScreenState extends State<DuelScreen> {
     const Duration tickDuration = Duration(milliseconds: 85);
 
     _diceRollTimer?.cancel();
+    _diceResultTimer?.cancel();
+    _diceResultTimer = null;
     setState(() {
       _isRollingDice = true;
       _diceRollTicks = 0;
-      _playerOneDie = _random.nextInt(6) + 1;
-      _playerTwoDie = _random.nextInt(6) + 1;
+      _showDiceResults = true;
+      _playerOneDie = _nextDieValue(_random);
+      _playerTwoDie = _nextDieValue(_random);
     });
 
     _diceRollTimer = Timer.periodic(tickDuration, (Timer timer) {
@@ -9110,17 +9529,37 @@ class _DuelScreenState extends State<DuelScreen> {
         return;
       }
 
+      bool shouldStop = false;
       setState(() {
-        _playerOneDie = _random.nextInt(6) + 1;
-        _playerTwoDie = _random.nextInt(6) + 1;
+        _playerOneDie = _nextDieValue(_random);
+        _playerTwoDie = _nextDieValue(_random);
         _diceRollTicks += 1;
 
         if (_diceRollTicks >= totalTicks) {
           _isRollingDice = false;
-          timer.cancel();
-          _diceRollTimer = null;
+          shouldStop = true;
         }
       });
+      if (shouldStop) {
+        timer.cancel();
+        _diceRollTimer = null;
+        _scheduleDiceResultDismissal();
+      }
+    });
+  }
+
+  void _scheduleDiceResultDismissal() {
+    _diceResultTimer?.cancel();
+    _diceResultTimer = Timer(_diceResultVisibilityDuration, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showDiceResults = false;
+        _playerOneDie = null;
+        _playerTwoDie = null;
+      });
+      _diceResultTimer = null;
     });
   }
 
@@ -9167,9 +9606,11 @@ class _DuelScreenState extends State<DuelScreen> {
     int value, {
     required bool compact,
     required bool isRolling,
+    bool prominent = false,
   }) {
-    final double size = compact ? 24 : 30;
-    final double pipSize = compact ? 3.3 : 4.0;
+    final double size = prominent ? (compact ? 36 : 44) : (compact ? 28 : 34);
+    final double pipSize = prominent ? size * 0.16 : size * 0.145;
+    final double inset = prominent ? size * 0.14 : size * 0.13;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 80),
@@ -9177,14 +9618,14 @@ class _DuelScreenState extends State<DuelScreen> {
       height: size,
       decoration: BoxDecoration(
         color: isRolling ? const Color(0xFFFFE9B3) : const Color(0xFFEEEDED),
-        borderRadius: BorderRadius.circular(compact ? 6 : 8),
+        borderRadius: BorderRadius.circular(prominent ? 12 : (compact ? 7 : 9)),
         border: Border.all(
           color: isRolling ? const Color(0xFFE7C061) : const Color(0xFFB0AFAF),
-          width: isRolling ? 1.6 : 1,
+          width: prominent ? (isRolling ? 1.9 : 1.2) : (isRolling ? 1.6 : 1),
         ),
       ),
       child: Padding(
-        padding: EdgeInsets.all(compact ? 3 : 4),
+        padding: EdgeInsets.all(inset),
         child: Stack(
           children: [
             for (final Alignment align in _diePipAlignments(value))
@@ -9202,6 +9643,49 @@ class _DuelScreenState extends State<DuelScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAnimatedDieResult({required int value, required bool compact}) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutBack,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.88, end: 1).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: !_showDiceResults
+          ? const SizedBox.shrink(key: ValueKey<String>('dice-hidden'))
+          : Container(
+              key: ValueKey<String>(
+                'dice-$value-${compact ? 'compact' : 'regular'}-${_isRollingDice ? 'rolling' : 'final'}',
+              ),
+              padding: EdgeInsets.all(compact ? 4 : 5),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.24),
+                borderRadius: BorderRadius.circular(compact ? 14 : 18),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.28),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: _buildDieFace(
+                value,
+                compact: compact,
+                isRolling: _isRollingDice,
+                prominent: true,
+              ),
+            ),
     );
   }
 
@@ -9358,6 +9842,8 @@ class _DuelScreenState extends State<DuelScreen> {
     final bool isYugiohRules = !_isMtgRules;
     final bool isYugiohCompact = isYugiohRules && compact;
     final int? dieValue = player == 1 ? _playerOneDie : _playerTwoDie;
+    final bool showDieResult = _showDiceResults && dieValue != null;
+    final int dieResultValue = dieValue ?? 0;
     final int poisonCounters = _isMtgRules
         ? _poisonCountersForPlayer(player)
         : 0;
@@ -9459,14 +9945,6 @@ class _DuelScreenState extends State<DuelScreen> {
                 ],
               ),
               const Spacer(),
-              if (dieValue != null) ...[
-                _buildDieFace(
-                  dieValue,
-                  compact: compact,
-                  isRolling: _isRollingDice,
-                ),
-                const SizedBox(width: 6),
-              ],
               IconButton(
                 tooltip: 'Open calculator',
                 onPressed: () => _openCalculatorForPlayer(player),
@@ -9777,6 +10255,16 @@ class _DuelScreenState extends State<DuelScreen> {
                     compact: compact,
                   ),
                 ),
+                Positioned(
+                  left: 0,
+                  top: compact ? 2 : 4,
+                  child: showDieResult
+                      ? _buildAnimatedDieResult(
+                          value: dieResultValue,
+                          compact: compact,
+                        )
+                      : const SizedBox.shrink(),
+                ),
               ],
             ),
           ),
@@ -9870,11 +10358,9 @@ class _DuelScreenState extends State<DuelScreen> {
                       ),
                       const SizedBox(width: spacing),
                       controlButton(
-                        onPressed: _selectedDeckForGuide() == null
-                            ? null
-                            : () {
-                                unawaited(_openSideboardGuideDialog());
-                              },
+                        onPressed: () {
+                          unawaited(_openSideboardGuideDialog());
+                        },
                         child: const Icon(Icons.menu_book_outlined, size: 30),
                       ),
                       const SizedBox(width: spacing),
@@ -9983,13 +10469,24 @@ class GameHistoryScreen extends StatefulWidget {
 }
 
 class _GameHistoryScreenState extends State<GameHistoryScreen> {
+  static const int _matchPageSize = 20;
+
   late List<GameRecord> _records;
   MatchHistorySortMode _matchHistorySortMode = MatchHistorySortMode.date;
+  String _selectedMatchDeckFilter = '';
+  String _selectedMatchOpponentDeckFilter = '';
+  String _selectedMatchFormatFilter = '';
   String _selectedMatchTagFilter = '';
+  late final ScrollController _matchListController;
+  late final TextEditingController _opponentNameFilterController;
+  int _visibleMatchCount = _matchPageSize;
 
   @override
   void initState() {
     super.initState();
+    _matchListController = ScrollController()
+      ..addListener(_handleMatchListScroll);
+    _opponentNameFilterController = TextEditingController();
     _records = List<GameRecord>.from(widget.records);
     _records.sort((GameRecord a, GameRecord b) {
       return b.createdAt.compareTo(a.createdAt);
@@ -10010,8 +10507,75 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     });
   }
 
+  void _handleMatchListScroll() {
+    if (!_matchListController.hasClients) {
+      return;
+    }
+    final ScrollPosition position = _matchListController.position;
+    if (position.pixels < position.maxScrollExtent - 240) {
+      return;
+    }
+    final List<MatchRecord> allMatches = _twoPlayerMatchRecords();
+    final int totalMatches = _sortedMatchRecords(
+      _filteredMatchRecords(
+        allMatches,
+        selectedDeckFilter: _selectedMatchDeckFilter,
+        selectedOpponentDeckFilter: _selectedMatchOpponentDeckFilter,
+        selectedFormatFilter: _selectedMatchFormatFilter,
+        selectedTagFilter: _selectedMatchTagFilter,
+        opponentQuery: _opponentNameFilterController.text,
+      ),
+    ).length;
+    if (_visibleMatchCount >= totalMatches) {
+      return;
+    }
+    setState(() {
+      _visibleMatchCount = min(
+        totalMatches,
+        _visibleMatchCount + _matchPageSize,
+      );
+    });
+  }
+
+  void _resetVisibleMatchCount() {
+    _visibleMatchCount = _matchPageSize;
+  }
+
+  bool _isPersistedHistoryRecord(GameRecord record) {
+    return record.lifePointHistory.isNotEmpty ||
+        _normalizedMatchResultOrEmpty(record.matchResult).isNotEmpty;
+  }
+
   void _closeWithResult() {
     Navigator.of(context).pop(_records);
+  }
+
+  bool get _hasActiveMatchFilters {
+    return _selectedMatchDeckFilter.isNotEmpty ||
+        _selectedMatchOpponentDeckFilter.isNotEmpty ||
+        _selectedMatchFormatFilter.isNotEmpty ||
+        _selectedMatchTagFilter.isNotEmpty ||
+        _opponentNameFilterController.text.trim().isNotEmpty;
+  }
+
+  void _clearMatchFilters() {
+    _opponentNameFilterController.clear();
+    setState(() {
+      _selectedMatchDeckFilter = '';
+      _selectedMatchOpponentDeckFilter = '';
+      _selectedMatchFormatFilter = '';
+      _selectedMatchTagFilter = '';
+      _resetVisibleMatchCount();
+    });
+  }
+
+  @override
+  void dispose() {
+    _opponentNameFilterController.dispose();
+    _matchListController
+      ..removeListener(_handleMatchListScroll)
+      ..dispose();
+    super.dispose();
   }
 
   bool get _isTwoPlayerHistoryOnly {
@@ -10047,9 +10611,146 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     return '';
   }
 
+  String _matchDeckFilterValue({
+    required String deckId,
+    required String deckName,
+  }) {
+    final String trimmedId = deckId.trim();
+    final String trimmedName = deckName.trim();
+    if (trimmedId.isNotEmpty) {
+      return 'id:$trimmedId';
+    }
+    if (trimmedName.isNotEmpty) {
+      return 'name:${trimmedName.toLowerCase()}';
+    }
+    return '';
+  }
+
+  List<_FilterOption> _matchDeckOptions(
+    List<MatchRecord> matches, {
+    required bool opponentDeck,
+  }) {
+    final Map<String, String> values = <String, String>{};
+    for (final MatchRecord match in matches) {
+      final String deckId = opponentDeck
+          ? match.metadata.opponentDeckId
+          : match.metadata.deckId;
+      final String deckName = opponentDeck
+          ? match.metadata.opponentDeckName
+          : match.metadata.deckName;
+      final String value = _matchDeckFilterValue(
+        deckId: deckId,
+        deckName: deckName,
+      );
+      final String label = deckName.trim().isNotEmpty
+          ? deckName.trim()
+          : deckId.trim();
+      if (value.isEmpty || label.isEmpty) {
+        continue;
+      }
+      values.putIfAbsent(value, () => label);
+    }
+    final List<_FilterOption> options = values.entries
+        .map(
+          (MapEntry<String, String> entry) =>
+              _FilterOption(value: entry.key, label: entry.value),
+        )
+        .toList(growable: false);
+    options.sort(((_FilterOption a, _FilterOption b) {
+      return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+    }));
+    return options;
+  }
+
+  List<String> _availableMatchFormats(List<MatchRecord> matches) {
+    final Set<String> unique = <String>{};
+    for (final MatchRecord match in matches) {
+      final String format = match.metadata.format.trim();
+      if (format.isEmpty) {
+        continue;
+      }
+      unique.add(format);
+    }
+    final List<String> sorted = unique.toList(growable: false);
+    sorted.sort((String a, String b) {
+      return a.toLowerCase().compareTo(b.toLowerCase());
+    });
+    return sorted;
+  }
+
+  bool _matchesDeckFilter(
+    MatchRecord match,
+    String selectedValue, {
+    required bool opponentDeck,
+  }) {
+    final String trimmedValue = selectedValue.trim();
+    if (trimmedValue.isEmpty) {
+      return true;
+    }
+    final String value = _matchDeckFilterValue(
+      deckId: opponentDeck
+          ? match.metadata.opponentDeckId
+          : match.metadata.deckId,
+      deckName: opponentDeck
+          ? match.metadata.opponentDeckName
+          : match.metadata.deckName,
+    );
+    return value == trimmedValue;
+  }
+
+  List<MatchRecord> _filteredMatchRecords(
+    List<MatchRecord> matches, {
+    required String selectedDeckFilter,
+    required String selectedOpponentDeckFilter,
+    required String selectedFormatFilter,
+    required String selectedTagFilter,
+    required String opponentQuery,
+  }) {
+    final String normalizedFormat = selectedFormatFilter.trim().toLowerCase();
+    final String normalizedTag = selectedTagFilter.trim().toLowerCase();
+    final String normalizedOpponentQuery = opponentQuery.trim().toLowerCase();
+
+    return matches
+        .where((MatchRecord match) {
+          if (!_matchesDeckFilter(
+            match,
+            selectedDeckFilter,
+            opponentDeck: false,
+          )) {
+            return false;
+          }
+          if (!_matchesDeckFilter(
+            match,
+            selectedOpponentDeckFilter,
+            opponentDeck: true,
+          )) {
+            return false;
+          }
+          if (normalizedFormat.isNotEmpty &&
+              match.metadata.format.trim().toLowerCase() != normalizedFormat) {
+            return false;
+          }
+          if (normalizedTag.isNotEmpty &&
+              match.metadata.tag.trim().toLowerCase() != normalizedTag) {
+            return false;
+          }
+          if (normalizedOpponentQuery.isNotEmpty &&
+              !match.metadata.opponentName.trim().toLowerCase().contains(
+                normalizedOpponentQuery,
+              )) {
+            return false;
+          }
+          return true;
+        })
+        .toList(growable: false);
+  }
+
   List<MatchRecord> _twoPlayerMatchRecords() {
     final List<GameRecord> twoPlayerRecords = _records
-        .where((GameRecord record) => record.playerCount == 2)
+        .where(
+          (GameRecord record) =>
+              record.playerCount == 2 && _isPersistedHistoryRecord(record),
+        )
         .toList(growable: false);
     if (twoPlayerRecords.isEmpty) {
       return const <MatchRecord>[];
@@ -10185,7 +10886,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     return matches;
   }
 
-  List<MatchRecord> _sortedAndFilteredMatchRecords(List<MatchRecord> matches) {
+  List<MatchRecord> _sortedMatchRecords(List<MatchRecord> matches) {
     final List<MatchRecord> sorted = List<MatchRecord>.from(matches);
     switch (_matchHistorySortMode) {
       case MatchHistorySortMode.date:
@@ -10200,20 +10901,6 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
           );
         });
         break;
-      case MatchHistorySortMode.tag:
-        final String selectedTag = _selectedMatchTagFilter.trim().toLowerCase();
-        final List<MatchRecord> filtered = selectedTag.isEmpty
-            ? sorted
-            : sorted
-                  .where((MatchRecord match) {
-                    return match.metadata.tag.trim().toLowerCase() ==
-                        selectedTag;
-                  })
-                  .toList(growable: false);
-        filtered.sort((MatchRecord a, MatchRecord b) {
-          return b.createdAt.compareTo(a.createdAt);
-        });
-        return filtered;
     }
     return sorted;
   }
@@ -10861,108 +11548,354 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   Widget _buildTwoPlayerMatchList() {
     final AppStrings txt = context.txt;
     final List<MatchRecord> allMatches = _twoPlayerMatchRecords();
-    final List<String> availableTags = _availableMatchTags(allMatches);
-    if (_selectedMatchTagFilter.isNotEmpty &&
-        !availableTags.contains(_selectedMatchTagFilter)) {
-      _selectedMatchTagFilter = '';
-    }
-    final List<MatchRecord> matches = _sortedAndFilteredMatchRecords(
+    final List<_FilterOption> deckOptions = _matchDeckOptions(
       allMatches,
+      opponentDeck: false,
+    );
+    final List<_FilterOption> opponentDeckOptions = _matchDeckOptions(
+      allMatches,
+      opponentDeck: true,
+    );
+    final List<String> availableFormats = _availableMatchFormats(allMatches);
+    final List<String> availableTags = _availableMatchTags(allMatches);
+    final String effectiveSelectedDeckFilter =
+        deckOptions.any(
+          (_FilterOption option) => option.value == _selectedMatchDeckFilter,
+        )
+        ? _selectedMatchDeckFilter
+        : '';
+    final String effectiveSelectedOpponentDeckFilter =
+        opponentDeckOptions.any(
+          (_FilterOption option) =>
+              option.value == _selectedMatchOpponentDeckFilter,
+        )
+        ? _selectedMatchOpponentDeckFilter
+        : '';
+    final String effectiveSelectedFormatFilter =
+        _selectedMatchFormatFilter.isNotEmpty &&
+            availableFormats.contains(_selectedMatchFormatFilter)
+        ? _selectedMatchFormatFilter
+        : '';
+    final String effectiveSelectedTagFilter =
+        _selectedMatchTagFilter.isNotEmpty &&
+            availableTags.contains(_selectedMatchTagFilter)
+        ? _selectedMatchTagFilter
+        : '';
+    final List<MatchRecord> matches = _sortedMatchRecords(
+      _filteredMatchRecords(
+        allMatches,
+        selectedDeckFilter: effectiveSelectedDeckFilter,
+        selectedOpponentDeckFilter: effectiveSelectedOpponentDeckFilter,
+        selectedFormatFilter: effectiveSelectedFormatFilter,
+        selectedTagFilter: effectiveSelectedTagFilter,
+        opponentQuery: _opponentNameFilterController.text,
+      ),
     );
     if (matches.isEmpty) {
       return Center(
-        child: Text(
-          _matchHistorySortMode == MatchHistorySortMode.tag &&
-                  _selectedMatchTagFilter.isNotEmpty
-              ? txt.t(
-                  'history.noMatchesForTag',
-                  params: <String, Object?>{'tag': _selectedMatchTagFilter},
-                )
-              : txt.t('history.empty'),
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.74)),
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
-          child: Row(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: DropdownButtonFormField<MatchHistorySortMode>(
-                  initialValue: _matchHistorySortMode,
-                  decoration: InputDecoration(
-                    labelText: txt.t('history.sortFilter'),
-                    border: const OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: <DropdownMenuItem<MatchHistorySortMode>>[
-                    DropdownMenuItem<MatchHistorySortMode>(
-                      value: MatchHistorySortMode.date,
-                      child: Text(txt.t('history.byDate')),
-                    ),
-                    DropdownMenuItem<MatchHistorySortMode>(
-                      value: MatchHistorySortMode.name,
-                      child: Text(txt.t('history.byName')),
-                    ),
-                    DropdownMenuItem<MatchHistorySortMode>(
-                      value: MatchHistorySortMode.tag,
-                      child: Text(txt.t('history.byTag')),
-                    ),
-                  ],
-                  onChanged: (MatchHistorySortMode? mode) {
-                    if (mode == null) {
-                      return;
-                    }
-                    setState(() {
-                      _matchHistorySortMode = mode;
-                    });
-                  },
-                ),
+              Text(
+                _hasActiveMatchFilters
+                    ? txt.t('history.noMatchesWithFilters')
+                    : txt.t('history.empty'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.74)),
               ),
-              if (_matchHistorySortMode == MatchHistorySortMode.tag) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _selectedMatchTagFilter.isEmpty
-                        ? null
-                        : _selectedMatchTagFilter,
-                    decoration: InputDecoration(
-                      labelText: txt.t('field.tag'),
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: <DropdownMenuItem<String>>[
-                      DropdownMenuItem<String>(
-                        value: '',
-                        child: Text(txt.t('history.allTags')),
-                      ),
-                      ...availableTags.map((String tag) {
-                        return DropdownMenuItem<String>(
-                          value: tag,
-                          child: Text(tag, overflow: TextOverflow.ellipsis),
-                        );
-                      }),
-                    ],
-                    onChanged: (String? value) {
-                      setState(() {
-                        _selectedMatchTagFilter = (value ?? '').trim();
-                      });
-                    },
-                  ),
+              if (_hasActiveMatchFilters) ...[
+                const SizedBox(height: 12),
+                FilledButton.tonalIcon(
+                  onPressed: _clearMatchFilters,
+                  icon: const Icon(Icons.filter_alt_off_rounded),
+                  label: Text(txt.t('history.clearFilters')),
                 ),
               ],
             ],
           ),
         ),
+      );
+    }
+
+    final int visibleMatchCount = min(matches.length, _visibleMatchCount);
+    final bool hasMoreMatches = visibleMatchCount < matches.length;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+          child: Card(
+            color: const Color(0xFF1E1B1B),
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    txt.t('history.sortBy'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<MatchHistorySortMode>(
+                          initialValue: _matchHistorySortMode,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          items: <DropdownMenuItem<MatchHistorySortMode>>[
+                            DropdownMenuItem<MatchHistorySortMode>(
+                              value: MatchHistorySortMode.date,
+                              child: Text(txt.t('history.byDate')),
+                            ),
+                            DropdownMenuItem<MatchHistorySortMode>(
+                              value: MatchHistorySortMode.name,
+                              child: Text(txt.t('history.byName')),
+                            ),
+                          ],
+                          onChanged: (MatchHistorySortMode? mode) {
+                            if (mode == null) {
+                              return;
+                            }
+                            setState(() {
+                              _matchHistorySortMode = mode;
+                              _resetVisibleMatchCount();
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton.tonalIcon(
+                        onPressed: _hasActiveMatchFilters
+                            ? _clearMatchFilters
+                            : null,
+                        icon: const Icon(Icons.filter_alt_off_rounded),
+                        label: Text(txt.t('history.clearFilters')),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    txt.t('history.filters'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (deckOptions.isNotEmpty || opponentDeckOptions.isNotEmpty)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: effectiveSelectedDeckFilter.isEmpty
+                                ? null
+                                : effectiveSelectedDeckFilter,
+                            decoration: InputDecoration(
+                              labelText: txt.t('field.deck'),
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            items: <DropdownMenuItem<String>>[
+                              DropdownMenuItem<String>(
+                                value: '',
+                                child: Text(txt.t('history.allDecks')),
+                              ),
+                              ...deckOptions.map((_FilterOption option) {
+                                return DropdownMenuItem<String>(
+                                  value: option.value,
+                                  child: Text(
+                                    option.label,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }),
+                            ],
+                            onChanged: (String? value) {
+                              setState(() {
+                                _selectedMatchDeckFilter = (value ?? '').trim();
+                                _resetVisibleMatchCount();
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue:
+                                effectiveSelectedOpponentDeckFilter.isEmpty
+                                ? null
+                                : effectiveSelectedOpponentDeckFilter,
+                            decoration: InputDecoration(
+                              labelText: txt.t('field.opponentDeck'),
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            items: <DropdownMenuItem<String>>[
+                              DropdownMenuItem<String>(
+                                value: '',
+                                child: Text(txt.t('history.allOpponentDecks')),
+                              ),
+                              ...opponentDeckOptions.map((
+                                _FilterOption option,
+                              ) {
+                                return DropdownMenuItem<String>(
+                                  value: option.value,
+                                  child: Text(
+                                    option.label,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }),
+                            ],
+                            onChanged: (String? value) {
+                              setState(() {
+                                _selectedMatchOpponentDeckFilter = (value ?? '')
+                                    .trim();
+                                _resetVisibleMatchCount();
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (deckOptions.isNotEmpty || opponentDeckOptions.isNotEmpty)
+                    const SizedBox(height: 12),
+                  if (availableFormats.isNotEmpty || availableTags.isNotEmpty)
+                    Row(
+                      children: [
+                        if (availableFormats.isNotEmpty)
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue:
+                                  effectiveSelectedFormatFilter.isEmpty
+                                  ? null
+                                  : effectiveSelectedFormatFilter,
+                              decoration: InputDecoration(
+                                labelText: txt.t('field.format'),
+                                border: const OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              items: <DropdownMenuItem<String>>[
+                                DropdownMenuItem<String>(
+                                  value: '',
+                                  child: Text(txt.t('history.allFormats')),
+                                ),
+                                ...availableFormats.map((String format) {
+                                  return DropdownMenuItem<String>(
+                                    value: format,
+                                    child: Text(
+                                      format,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }),
+                              ],
+                              onChanged: (String? value) {
+                                setState(() {
+                                  _selectedMatchFormatFilter = (value ?? '')
+                                      .trim();
+                                  _resetVisibleMatchCount();
+                                });
+                              },
+                            ),
+                          ),
+                        if (availableFormats.isNotEmpty &&
+                            availableTags.isNotEmpty)
+                          const SizedBox(width: 12),
+                        if (availableTags.isNotEmpty)
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: effectiveSelectedTagFilter.isEmpty
+                                  ? null
+                                  : effectiveSelectedTagFilter,
+                              decoration: InputDecoration(
+                                labelText: txt.t('field.tag'),
+                                border: const OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              items: <DropdownMenuItem<String>>[
+                                DropdownMenuItem<String>(
+                                  value: '',
+                                  child: Text(txt.t('history.allTags')),
+                                ),
+                                ...availableTags.map((String tag) {
+                                  return DropdownMenuItem<String>(
+                                    value: tag,
+                                    child: Text(
+                                      tag,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }),
+                              ],
+                              onChanged: (String? value) {
+                                setState(() {
+                                  _selectedMatchTagFilter = (value ?? '')
+                                      .trim();
+                                  _resetVisibleMatchCount();
+                                });
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  if (availableFormats.isNotEmpty || availableTags.isNotEmpty)
+                    const SizedBox(height: 12),
+                  TextField(
+                    controller: _opponentNameFilterController,
+                    onChanged: (_) {
+                      setState(() {
+                        _resetVisibleMatchCount();
+                      });
+                    },
+                    decoration: InputDecoration(
+                      labelText: txt.t('history.opponentSearch'),
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon:
+                          _opponentNameFilterController.text.trim().isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _opponentNameFilterController.clear();
+                                setState(() {
+                                  _resetVisibleMatchCount();
+                                });
+                              },
+                              icon: const Icon(Icons.close_rounded),
+                              tooltip: txt.t('common.clear'),
+                            ),
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
         Expanded(
           child: ListView.builder(
+            controller: _matchListController,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            itemCount: matches.length,
+            itemCount: visibleMatchCount + (hasMoreMatches ? 1 : 0),
             itemBuilder: (BuildContext context, int index) {
+              if (index >= visibleMatchCount) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
               final MatchRecord match = matches[index];
               final String opponentLabel = match.metadata.opponentName.isEmpty
                   ? '-'
@@ -11584,23 +12517,7 @@ class _TwoPlayerMatchDetailScreenState
     });
   }
 
-  Future<void> _renameMatch() async {
-    final String? result = await _promptText(
-      title: 'Rename match',
-      initialValue: _effectiveMatchName(),
-      hintText: 'Match name',
-    );
-    if (result == null) {
-      return;
-    }
-    final String trimmed = result.trim();
-    if (trimmed.isEmpty) {
-      return;
-    }
-    _applyMatchMetadata(_metadata.copyWith(name: trimmed));
-  }
-
-  Future<void> _editMatchMetadata() async {
+  Future<void> _openMatchEditor() async {
     await showInfoTipOnce(
       context: context,
       tipId: InfoTipIds.opponentDeckSelection,
@@ -11657,16 +12574,39 @@ class _TwoPlayerMatchDetailScreenState
     }
 
     List<SideboardDeck> opponentDeckOptions() {
-      final String normalizedFormat = selectedFormat.trim().toLowerCase();
-      if (normalizedFormat.isEmpty) {
-        return widget.decks;
-      }
-      return widget.decks
-          .where((SideboardDeck deck) {
-            return deck.format.trim().toLowerCase() == normalizedFormat;
-          })
-          .toList(growable: false);
+      return _filterDecksByFormat(widget.decks, selectedFormat);
     }
+
+    List<SideboardDeck> deckOptions() {
+      return _filterDecksByFormat(widget.decks, selectedFormat);
+    }
+
+    void normalizeSelectedDeck() {
+      if (selectedDeckId.isEmpty) {
+        return;
+      }
+      final SideboardDeck? selectedDeck = _deckById(selectedDeckId);
+      if (selectedDeck == null ||
+          !_deckMatchesFormat(selectedDeck, selectedFormat)) {
+        selectedDeckId = '';
+      }
+    }
+
+    void normalizeSelectedOpponentDeck() {
+      if (selectedOpponentDeckId.isEmpty) {
+        return;
+      }
+      final SideboardDeck? selectedOpponentDeck = _deckById(
+        selectedOpponentDeckId,
+      );
+      if (selectedOpponentDeck == null ||
+          !_deckMatchesFormat(selectedOpponentDeck, selectedFormat)) {
+        selectedOpponentDeckId = '';
+      }
+    }
+
+    normalizeSelectedDeck();
+    normalizeSelectedOpponentDeck();
 
     final bool? shouldSave = await showDialog<bool>(
       context: context,
@@ -11741,34 +12681,15 @@ class _TwoPlayerMatchDetailScreenState
                           }
                           setDialogState(() {
                             selectedFormat = trimmed;
-                            if (selectedOpponentDeckId.isNotEmpty) {
-                              final SideboardDeck? selectedOpponentDeck =
-                                  _deckById(selectedOpponentDeckId);
-                              if (selectedOpponentDeck != null &&
-                                  selectedOpponentDeck.format
-                                          .trim()
-                                          .toLowerCase() !=
-                                      trimmed.toLowerCase()) {
-                                selectedOpponentDeckId = '';
-                              }
-                            }
+                            normalizeSelectedDeck();
+                            normalizeSelectedOpponentDeck();
                           });
                           return;
                         }
                         setDialogState(() {
                           selectedFormat = nextValue.trim();
-                          if (selectedOpponentDeckId.isNotEmpty) {
-                            final SideboardDeck? selectedOpponentDeck =
-                                _deckById(selectedOpponentDeckId);
-                            if (selectedOpponentDeck != null &&
-                                selectedFormat.isNotEmpty &&
-                                selectedOpponentDeck.format
-                                        .trim()
-                                        .toLowerCase() !=
-                                    selectedFormat.toLowerCase()) {
-                              selectedOpponentDeckId = '';
-                            }
-                          }
+                          normalizeSelectedDeck();
+                          normalizeSelectedOpponentDeck();
                         });
                       },
                     ),
@@ -11785,7 +12706,7 @@ class _TwoPlayerMatchDetailScreenState
                           value: '',
                           child: Text('No deck'),
                         ),
-                        ...widget.decks.map((SideboardDeck deck) {
+                        ...deckOptions().map((SideboardDeck deck) {
                           return DropdownMenuItem<String>(
                             value: deck.id,
                             child: Text(
@@ -11798,6 +12719,7 @@ class _TwoPlayerMatchDetailScreenState
                       onChanged: (String? nextValue) {
                         setDialogState(() {
                           selectedDeckId = (nextValue ?? '').trim();
+                          normalizeSelectedDeck();
                         });
                       },
                     ),
@@ -11829,6 +12751,7 @@ class _TwoPlayerMatchDetailScreenState
                       onChanged: (String? nextValue) {
                         setDialogState(() {
                           selectedOpponentDeckId = (nextValue ?? '').trim();
+                          normalizeSelectedOpponentDeck();
                         });
                       },
                     ),
@@ -11886,6 +12809,36 @@ class _TwoPlayerMatchDetailScreenState
     matchNameController.dispose();
     opponentController.dispose();
     tagController.dispose();
+  }
+
+  Widget _buildSummaryRow({required String label, required String value}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 112,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.68),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.trim().isEmpty ? '-' : value.trim(),
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.9),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _editGameDetails(GameRecord record) async {
@@ -12068,18 +13021,6 @@ class _TwoPlayerMatchDetailScreenState
             onPressed: _closeWithResult,
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
           ),
-          actions: [
-            IconButton(
-              tooltip: 'Rename match',
-              onPressed: _renameMatch,
-              icon: const Icon(Icons.edit_rounded),
-            ),
-            IconButton(
-              tooltip: 'Edit match details',
-              onPressed: _editMatchMetadata,
-              icon: const Icon(Icons.edit_note_rounded),
-            ),
-          ],
         ),
         body: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -12134,32 +13075,33 @@ class _TwoPlayerMatchDetailScreenState
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      'Opponent: ${_metadata.opponentName.trim().isEmpty ? '-' : _metadata.opponentName.trim()}',
+                    _buildSummaryRow(
+                      label: 'Opponent',
+                      value: _metadata.opponentName,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Deck: ${_metadata.deckName.trim().isEmpty ? '-' : _metadata.deckName.trim()}',
+                    _buildSummaryRow(label: 'Deck', value: _metadata.deckName),
+                    _buildSummaryRow(
+                      label: 'Opponent Deck',
+                      value: _metadata.opponentDeckName,
                     ),
-                    const SizedBox(height: 4),
+                    _buildSummaryRow(label: 'Format', value: _metadata.format),
+                    _buildSummaryRow(label: 'Tag', value: _metadata.tag),
+                    const SizedBox(height: 10),
                     Text(
-                      'Format: ${_metadata.format.trim().isEmpty ? '-' : _metadata.format.trim()}',
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Opponent Deck: ${_metadata.opponentDeckName.trim().isEmpty ? '-' : _metadata.opponentDeckName.trim()}',
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Tag: ${_metadata.tag.trim().isEmpty ? '-' : _metadata.tag.trim()}',
+                      'Edit match changes metadata only. Match result is calculated from the game results below.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.62),
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: FilledButton.tonalIcon(
-                        onPressed: _editMatchMetadata,
+                        onPressed: _openMatchEditor,
                         icon: const Icon(Icons.edit_note_rounded, size: 18),
-                        label: const Text('Edit match details'),
+                        label: const Text('Edit match'),
                       ),
                     ),
                   ],
@@ -12340,7 +13282,7 @@ class _TwoPlayerMatchDetailScreenState
   }
 }
 
-enum SideboardDeckSortMode { alphabetical, createdAt, favorites, format }
+enum SideboardDeckSortMode { alphabetical, createdAt, format }
 
 enum SideboardMatchupSortMode { alphabetical, createdAt }
 
@@ -12367,6 +13309,9 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
   late List<SideboardDeck> _decks;
   late List<GameRecord> _records;
   SideboardDeckSortMode _sortMode = SideboardDeckSortMode.createdAt;
+  bool _showFavoritesOnly = false;
+  String _selectedDeckFormatFilter = '';
+  String _selectedDeckTagFilter = '';
 
   @override
   void initState() {
@@ -12384,8 +13329,58 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
     );
   }
 
-  List<SideboardDeck> _sortedDecks() {
-    final List<SideboardDeck> sorted = List<SideboardDeck>.from(_decks);
+  List<String> _existingDeckTags() {
+    final Set<String> uniqueTags = <String>{};
+    for (final SideboardDeck deck in _decks) {
+      final String tag = deck.tag.trim();
+      if (tag.isEmpty) {
+        continue;
+      }
+      uniqueTags.add(tag);
+    }
+    final List<String> sorted = uniqueTags.toList(growable: false);
+    sorted.sort((String a, String b) {
+      return a.toLowerCase().compareTo(b.toLowerCase());
+    });
+    return sorted;
+  }
+
+  bool get _hasActiveDeckFilters {
+    return _showFavoritesOnly ||
+        _selectedDeckFormatFilter.isNotEmpty ||
+        _selectedDeckTagFilter.isNotEmpty;
+  }
+
+  void _clearDeckFilters() {
+    setState(() {
+      _showFavoritesOnly = false;
+      _selectedDeckFormatFilter = '';
+      _selectedDeckTagFilter = '';
+    });
+  }
+
+  List<SideboardDeck> _sortedAndFilteredDecks({
+    required String selectedFormatFilter,
+    required String selectedTagFilter,
+  }) {
+    final List<SideboardDeck> sorted = _decks
+        .where((SideboardDeck deck) {
+          if (_showFavoritesOnly && !deck.isFavorite) {
+            return false;
+          }
+          if (selectedFormatFilter.isNotEmpty &&
+              deck.format.trim().toLowerCase() !=
+                  selectedFormatFilter.trim().toLowerCase()) {
+            return false;
+          }
+          if (selectedTagFilter.isNotEmpty &&
+              deck.tag.trim().toLowerCase() !=
+                  selectedTagFilter.trim().toLowerCase()) {
+            return false;
+          }
+          return true;
+        })
+        .toList(growable: false);
     switch (_sortMode) {
       case SideboardDeckSortMode.alphabetical:
         sorted.sort((SideboardDeck a, SideboardDeck b) {
@@ -12395,14 +13390,6 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
       case SideboardDeckSortMode.createdAt:
         sorted.sort((SideboardDeck a, SideboardDeck b) {
           return b.createdAt.compareTo(a.createdAt);
-        });
-        break;
-      case SideboardDeckSortMode.favorites:
-        sorted.sort((SideboardDeck a, SideboardDeck b) {
-          if (a.isFavorite != b.isFavorite) {
-            return a.isFavorite ? -1 : 1;
-          }
-          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
         });
         break;
       case SideboardDeckSortMode.format:
@@ -12810,7 +13797,23 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final List<SideboardDeck> sortedDecks = _sortedDecks();
+    final AppStrings txt = context.txt;
+    final List<String> availableFormats = _existingDeckFormats();
+    final List<String> availableTags = _existingDeckTags();
+    final String effectiveFormatFilter =
+        _selectedDeckFormatFilter.isNotEmpty &&
+            availableFormats.contains(_selectedDeckFormatFilter)
+        ? _selectedDeckFormatFilter
+        : '';
+    final String effectiveTagFilter =
+        _selectedDeckTagFilter.isNotEmpty &&
+            availableTags.contains(_selectedDeckTagFilter)
+        ? _selectedDeckTagFilter
+        : '';
+    final List<SideboardDeck> sortedDecks = _sortedAndFilteredDecks(
+      selectedFormatFilter: effectiveFormatFilter,
+      selectedTagFilter: effectiveTagFilter,
+    );
 
     return PopScope(
       canPop: false,
@@ -12828,35 +13831,6 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
           ),
           actions: [
-            PopupMenuButton<SideboardDeckSortMode>(
-              tooltip: 'Sort decks',
-              onSelected: (SideboardDeckSortMode mode) {
-                setState(() {
-                  _sortMode = mode;
-                });
-              },
-              itemBuilder: (BuildContext context) {
-                return const <PopupMenuEntry<SideboardDeckSortMode>>[
-                  PopupMenuItem<SideboardDeckSortMode>(
-                    value: SideboardDeckSortMode.alphabetical,
-                    child: Text('Alphabetical'),
-                  ),
-                  PopupMenuItem<SideboardDeckSortMode>(
-                    value: SideboardDeckSortMode.createdAt,
-                    child: Text('Creation Date'),
-                  ),
-                  PopupMenuItem<SideboardDeckSortMode>(
-                    value: SideboardDeckSortMode.favorites,
-                    child: Text('Favorites'),
-                  ),
-                  PopupMenuItem<SideboardDeckSortMode>(
-                    value: SideboardDeckSortMode.format,
-                    child: Text('Format'),
-                  ),
-                ];
-              },
-              icon: const Icon(Icons.sort_rounded),
-            ),
             IconButton(
               tooltip: 'Add deck',
               onPressed: _addDeck,
@@ -12864,77 +13838,288 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
             ),
           ],
         ),
-        body: sortedDecks.isEmpty
+        body: _decks.isEmpty
             ? Center(
                 child: Text(
-                  'No decks yet.\nTap + to create your first deck.',
+                  txt.t('deckList.empty'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white.withValues(alpha: 0.74)),
                 ),
               )
-            : ListView.builder(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                itemCount: sortedDecks.length,
-                itemBuilder: (BuildContext context, int index) {
-                  final SideboardDeck deck = sortedDecks[index];
-                  final int matchupCount = deck.matchups.length;
-                  final String matchupLabel = matchupCount == 1
-                      ? '1 matchup'
-                      : '$matchupCount matchups';
-                  final String trimmedFormat = deck.format.trim();
-                  final String subtitleText = trimmedFormat.isEmpty
-                      ? matchupLabel
-                      : 'Format: $trimmedFormat  •  $matchupLabel';
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    color: const Color(0xFF1E1B1B),
-                    child: ListTile(
-                      onTap: () => _openDeck(deck),
-                      title: Text(
-                        deck.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 17,
-                        ),
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          subtitleText,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.75),
-                          ),
-                        ),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            onPressed: () => _editDeck(deck),
-                            tooltip: 'Edit deck',
-                            icon: const Icon(Icons.edit_rounded),
-                          ),
-                          IconButton(
-                            onPressed: () => _toggleFavorite(deck),
-                            tooltip: 'Toggle favorite',
-                            icon: Icon(
-                              deck.isFavorite
-                                  ? Icons.star_rounded
-                                  : Icons.star_outline_rounded,
-                              color: deck.isFavorite
-                                  ? Colors.white
-                                  : Colors.white.withValues(alpha: 0.65),
+            : Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+                    child: Card(
+                      color: const Color(0xFF1E1B1B),
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              txt.t('deckList.sortBy'),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white.withValues(alpha: 0.7),
+                              ),
                             ),
-                          ),
-                          const Icon(Icons.chevron_right_rounded),
-                        ],
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<SideboardDeckSortMode>(
+                              initialValue: _sortMode,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              items: <DropdownMenuItem<SideboardDeckSortMode>>[
+                                DropdownMenuItem<SideboardDeckSortMode>(
+                                  value: SideboardDeckSortMode.createdAt,
+                                  child: Text(
+                                    txt.t('deckList.sortCreationDate'),
+                                  ),
+                                ),
+                                DropdownMenuItem<SideboardDeckSortMode>(
+                                  value: SideboardDeckSortMode.alphabetical,
+                                  child: Text(
+                                    txt.t('deckList.sortAlphabetical'),
+                                  ),
+                                ),
+                                DropdownMenuItem<SideboardDeckSortMode>(
+                                  value: SideboardDeckSortMode.format,
+                                  child: Text(txt.t('deckList.sortFormat')),
+                                ),
+                              ],
+                              onChanged: (SideboardDeckSortMode? mode) {
+                                if (mode == null) {
+                                  return;
+                                }
+                                setState(() {
+                                  _sortMode = mode;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              txt.t('deckList.filters'),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white.withValues(alpha: 0.7),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (availableFormats.isNotEmpty)
+                              DropdownButtonFormField<String>(
+                                initialValue: effectiveFormatFilter.isEmpty
+                                    ? null
+                                    : effectiveFormatFilter,
+                                decoration: InputDecoration(
+                                  labelText: txt.t('field.format'),
+                                  border: const OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                items: <DropdownMenuItem<String>>[
+                                  DropdownMenuItem<String>(
+                                    value: '',
+                                    child: Text(txt.t('deckList.allFormats')),
+                                  ),
+                                  ...availableFormats.map((String format) {
+                                    return DropdownMenuItem<String>(
+                                      value: format,
+                                      child: Text(
+                                        format,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    );
+                                  }),
+                                ],
+                                onChanged: (String? value) {
+                                  setState(() {
+                                    _selectedDeckFormatFilter = (value ?? '')
+                                        .trim();
+                                  });
+                                },
+                              ),
+                            if (availableFormats.isNotEmpty &&
+                                availableTags.isNotEmpty)
+                              const SizedBox(height: 12),
+                            if (availableTags.isNotEmpty)
+                              DropdownButtonFormField<String>(
+                                initialValue: effectiveTagFilter.isEmpty
+                                    ? null
+                                    : effectiveTagFilter,
+                                decoration: InputDecoration(
+                                  labelText: txt.t('field.tag'),
+                                  border: const OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                items: <DropdownMenuItem<String>>[
+                                  DropdownMenuItem<String>(
+                                    value: '',
+                                    child: Text(txt.t('deckList.allTags')),
+                                  ),
+                                  ...availableTags.map((String tag) {
+                                    return DropdownMenuItem<String>(
+                                      value: tag,
+                                      child: Text(
+                                        tag,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    );
+                                  }),
+                                ],
+                                onChanged: (String? value) {
+                                  setState(() {
+                                    _selectedDeckTagFilter = (value ?? '')
+                                        .trim();
+                                  });
+                                },
+                              ),
+                            if (availableFormats.isNotEmpty ||
+                                availableTags.isNotEmpty)
+                              const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: FilterChip(
+                                      label: Text(
+                                        txt.t('deckList.favoritesOnly'),
+                                      ),
+                                      selected: _showFavoritesOnly,
+                                      onSelected: (bool selected) {
+                                        setState(() {
+                                          _showFavoritesOnly = selected;
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                FilledButton.tonalIcon(
+                                  onPressed: _hasActiveDeckFilters
+                                      ? _clearDeckFilters
+                                      : null,
+                                  icon: const Icon(
+                                    Icons.filter_alt_off_rounded,
+                                  ),
+                                  label: Text(txt.t('deckList.clearFilters')),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  );
-                },
+                  ),
+                  Expanded(
+                    child: sortedDecks.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    txt.t('deckList.noDecksWithFilters'),
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.74,
+                                      ),
+                                    ),
+                                  ),
+                                  if (_hasActiveDeckFilters) ...[
+                                    const SizedBox(height: 12),
+                                    FilledButton.tonalIcon(
+                                      onPressed: _clearDeckFilters,
+                                      icon: const Icon(
+                                        Icons.filter_alt_off_rounded,
+                                      ),
+                                      label: Text(
+                                        txt.t('deckList.clearFilters'),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            itemCount: sortedDecks.length,
+                            itemBuilder: (BuildContext context, int index) {
+                              final SideboardDeck deck = sortedDecks[index];
+                              final int matchupCount = deck.matchups.length;
+                              final String matchupLabel = matchupCount == 1
+                                  ? '1 matchup'
+                                  : '$matchupCount matchups';
+                              final String trimmedFormat = deck.format.trim();
+                              final String subtitleText = trimmedFormat.isEmpty
+                                  ? matchupLabel
+                                  : 'Format: $trimmedFormat  •  $matchupLabel';
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                color: const Color(0xFF1E1B1B),
+                                child: ListTile(
+                                  onTap: () => _openDeck(deck),
+                                  title: Text(
+                                    deck.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 17,
+                                    ),
+                                  ),
+                                  subtitle: Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      subtitleText,
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.75,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        onPressed: () => _editDeck(deck),
+                                        tooltip: 'Edit deck',
+                                        icon: const Icon(Icons.edit_rounded),
+                                      ),
+                                      IconButton(
+                                        onPressed: () => _toggleFavorite(deck),
+                                        tooltip: 'Toggle favorite',
+                                        icon: Icon(
+                                          deck.isFavorite
+                                              ? Icons.star_rounded
+                                              : Icons.star_outline_rounded,
+                                          color: deck.isFavorite
+                                              ? Colors.white
+                                              : Colors.white.withValues(
+                                                  alpha: 0.65,
+                                                ),
+                                        ),
+                                      ),
+                                      const Icon(Icons.chevron_right_rounded),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
       ),
     );
