@@ -2660,6 +2660,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     await _queuedCheckpointSave;
 
+    if (!mounted) return;
+
     final String latestDeckName = duelResult?.deckName.trim() ?? '';
     if (duelResult != null) {
       setState(() {
@@ -12507,7 +12509,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      _formatDateTime(record.createdAt),
+                                      _formatDateTime(record.createdAt, context),
                                       style: TextStyle(
                                         color: Colors.white.withValues(
                                           alpha: 0.7,
@@ -13610,7 +13612,7 @@ class _TwoPlayerMatchDetailScreenState
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          _formatDateTime(game.createdAt),
+                          _formatDateTime(game.createdAt, context),
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 12,
@@ -15410,7 +15412,7 @@ class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _formatDateTime(match.createdAt),
+                            _formatDateTime(match.createdAt, context),
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.white.withValues(alpha: 0.7),
