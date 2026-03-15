@@ -42,55 +42,42 @@ int _nextDieValue(Random random, {int sides = _defaultDieSides}) {
 enum AppLanguage { system, english, italian }
 
 extension AppLanguageX on AppLanguage {
-  String get storageKey {
-    switch (this) {
-      case AppLanguage.system:
-        return 'system';
-      case AppLanguage.english:
-        return 'en';
-      case AppLanguage.italian:
-        return 'it';
-    }
-  }
+  static const Map<AppLanguage, String> _storageCodes = <AppLanguage, String>{
+    AppLanguage.english: 'en',
+    AppLanguage.italian: 'it',
+  };
+
+  String get storageKey => _storageCodes[this] ?? 'system';
 
   String get localeCode {
-    switch (this) {
-      case AppLanguage.english:
-        return 'en';
-      case AppLanguage.italian:
-        return 'it';
-      case AppLanguage.system:
-        final Locale systemLocale =
-            WidgetsBinding.instance.platformDispatcher.locale;
-        if (systemLocale.languageCode.toLowerCase().startsWith('it')) {
-          return 'it';
-        }
-        return 'en';
+    if (this == AppLanguage.system) {
+      final String systemCode = WidgetsBinding
+          .instance.platformDispatcher.locale.languageCode
+          .toLowerCase();
+      return _storageCodes.values.firstWhere(
+        (String code) => systemCode.startsWith(code),
+        orElse: () => 'en',
+      );
     }
+    return _storageCodes[this] ?? 'en';
   }
 
   Locale? get materialLocale {
-    switch (this) {
-      case AppLanguage.system:
-        return null;
-      case AppLanguage.english:
-        return const Locale('en');
-      case AppLanguage.italian:
-        return const Locale('it');
-    }
+    final String? code = _storageCodes[this];
+    return code == null ? null : Locale(code);
   }
 
   static AppLanguage fromStorageKey(String? raw) {
     final String normalized = (raw ?? '').trim().toLowerCase();
-    switch (normalized) {
-      case 'en':
-        return AppLanguage.english;
-      case 'it':
-        return AppLanguage.italian;
-      case 'system':
-      default:
-        return AppLanguage.system;
-    }
+    return _storageCodes.entries
+        .firstWhere(
+          (MapEntry<AppLanguage, String> e) => e.value == normalized,
+          orElse: () => const MapEntry<AppLanguage, String>(
+            AppLanguage.system,
+            'system',
+          ),
+        )
+        .key;
   }
 }
 
@@ -441,9 +428,7 @@ class AppStrings {
     String key, {
     Map<String, Object?> params = const <String, Object?>{},
   }) {
-    final String language = languageCode.toLowerCase().startsWith('it')
-        ? 'it'
-        : 'en';
+    final String language = _catalog.containsKey(languageCode) ? languageCode : 'en';
     final String fallback = _catalog['en']?[key] ?? key;
     String value = _catalog[language]?[key] ?? fallback;
     if (params.isEmpty) {
