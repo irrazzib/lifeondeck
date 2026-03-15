@@ -4442,7 +4442,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton.tonal(
               onPressed: () => Navigator.of(
@@ -6002,7 +6002,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -6210,7 +6210,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
           ],
         );
@@ -9653,7 +9653,7 @@ class _DuelScreenState extends State<DuelScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -9777,7 +9777,7 @@ class _DuelScreenState extends State<DuelScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
           ],
         );
@@ -11538,7 +11538,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -11712,7 +11712,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -11826,7 +11826,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -13161,7 +13161,7 @@ class _TwoPlayerMatchDetailScreenState
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -13318,7 +13318,7 @@ class _TwoPlayerMatchDetailScreenState
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -13359,7 +13359,7 @@ class _TwoPlayerMatchDetailScreenState
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -13923,7 +13923,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('Cancel'),
+                    child: Text(context.txt.t('common.cancel')),
                   ),
                   FilledButton(
                     onPressed: () {
@@ -14754,6 +14754,7 @@ class _SideboardMatchupListScreenState
 
   @override
   Widget build(BuildContext context) {
+    final AppStrings txt = context.txt;
     final String formatLabel = widget.deck.format.trim().isEmpty
         ? '-'
         : widget.deck.format.trim();
@@ -14798,7 +14799,7 @@ class _SideboardMatchupListScreenState
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Choose a section',
+                        txt.t('section.chooseSection'),
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.7),
                           fontSize: 12,
@@ -14811,28 +14812,28 @@ class _SideboardMatchupListScreenState
               const SizedBox(height: 12),
               _DeckSectionButton(
                 icon: Icons.sticky_note_2_outlined,
-                title: 'User Notes',
+                title: txt.t('section.userNotes'),
                 subtitle: 'Write and update notes for this deck',
                 onTap: _openUserNotes,
               ),
               const SizedBox(height: 10),
               _DeckSectionButton(
                 icon: Icons.history_rounded,
-                title: 'Matchup History',
+                title: txt.t('section.matchupHistory'),
                 subtitle: 'Saved matches played with this deck',
                 onTap: _openMatchupHistory,
               ),
               const SizedBox(height: 10),
               _DeckSectionButton(
                 icon: Icons.menu_book_rounded,
-                title: 'Sideboard Plans',
+                title: txt.t('section.sideboardPlans'),
                 subtitle: 'Manage side in/out plans by matchup',
                 onTap: _openSideboardPlans,
               ),
               const SizedBox(height: 10),
               _DeckSectionButton(
                 icon: Icons.query_stats_rounded,
-                title: 'Statistics',
+                title: txt.t('section.statistics'),
                 subtitle: 'Deck vs deck results from saved matches',
                 onTap: _openStatistics,
               ),
@@ -14927,7 +14928,7 @@ class _DeckUserNotesScreenState extends State<_DeckUserNotesScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('User Notes'),
+          title: Text(context.txt.t('section.userNotes')),
           leading: IconButton(
             onPressed: _closeWithSave,
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
@@ -15243,6 +15244,7 @@ class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppStrings txt = context.txt;
     final List<SideboardMatchup> sortedMatchups = _sortedMatchups();
     final List<MatchRecord> linkedMatches = _linkedMatchRecords();
     final bool showSideboardPlans =
@@ -15258,7 +15260,7 @@ class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(
-            showSideboardPlans ? 'Sideboard Plans' : 'Matchup History',
+            txt.t(showSideboardPlans ? 'section.sideboardPlans' : 'section.matchupHistory'),
           ),
           leading: IconButton(
             onPressed: _closeWithResult,
@@ -15592,6 +15594,7 @@ class _DeckStatisticsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppStrings txt = context.txt;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) {
         return;
@@ -15608,11 +15611,11 @@ class _DeckStatisticsScreen extends StatelessWidget {
     });
     final List<_DeckStatisticsRow> rows = _statsRows();
     return Scaffold(
-      appBar: AppBar(title: const Text('Statistics')),
+      appBar: AppBar(title: Text(txt.t('statistics.title'))),
       body: rows.isEmpty
           ? Center(
               child: Text(
-                'No match data for this deck yet.',
+                txt.t('statistics.empty'),
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.74)),
               ),
             )
@@ -15636,26 +15639,29 @@ class _DeckStatisticsScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'vs ${row.opponentDeck}',
+                          txt.t(
+                            'statistics.vs',
+                            params: <String, Object?>{'deck': row.opponentDeck},
+                          ),
                           style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 16,
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Text('Matches: ${row.matches}'),
+                        Text(txt.t('statistics.matches', params: <String, Object?>{'count': row.matches})),
                         const SizedBox(height: 2),
-                        Text('Wins: ${row.wins}'),
+                        Text(txt.t('statistics.wins', params: <String, Object?>{'count': row.wins})),
                         const SizedBox(height: 2),
-                        Text('Losses: ${row.losses}'),
+                        Text(txt.t('statistics.losses', params: <String, Object?>{'count': row.losses})),
                         if (row.draws > 0) ...[
                           const SizedBox(height: 2),
-                          Text('Draws: ${row.draws}'),
+                          Text(txt.t('statistics.draws', params: <String, Object?>{'count': row.draws})),
                         ],
                         const SizedBox(height: 6),
-                        Text('Winrate: ${winRate.toStringAsFixed(1)}%'),
+                        Text(txt.t('statistics.winrate', params: <String, Object?>{'value': winRate.toStringAsFixed(1)})),
                         const SizedBox(height: 2),
-                        Text('Loss rate: ${lossRate.toStringAsFixed(1)}%'),
+                        Text(txt.t('statistics.lossRate', params: <String, Object?>{'value': lossRate.toStringAsFixed(1)})),
                       ],
                     ),
                   ),
@@ -15959,7 +15965,7 @@ class _TextPromptDialogState extends State<_TextPromptDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(context.txt.t('common.cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_controller.text),
