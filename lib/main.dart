@@ -5018,9 +5018,13 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       widget.playerCount,
       (int index) => _defaultPlayerName(index),
     );
-    _playerCardBackgroundColors = List<Color>.filled(
+    _playerCardBackgroundColors = List<Color>.generate(
       widget.playerCount,
-      widget.settings.lifePointsBackgroundColor,
+      (int i) {
+        if (i == 0) return widget.settings.playerOneColor;
+        if (i == 1) return widget.settings.playerTwoColor;
+        return widget.settings.lifePointsBackgroundColor;
+      },
     );
     _lifePoints = List<int>.filled(
       widget.playerCount,
