@@ -17,6 +17,7 @@ const Set<String> _supportedTcgStorageKeys = <String>{
 };
 const String _appBuildTag = 'build 8286103';
 const String _onboardingCompletedKey = 'onboarding_completed_v1';
+const String _defaultGameSelectedKey = 'default_game_selected_v1';
 const String _seenInfoTipsKey = 'seen_info_tips_v1';
 const int _defaultDieSides = 6;
 const Duration _diceResultVisibilityDuration = Duration(seconds: 3);
@@ -42,55 +43,42 @@ int _nextDieValue(Random random, {int sides = _defaultDieSides}) {
 enum AppLanguage { system, english, italian }
 
 extension AppLanguageX on AppLanguage {
-  String get storageKey {
-    switch (this) {
-      case AppLanguage.system:
-        return 'system';
-      case AppLanguage.english:
-        return 'en';
-      case AppLanguage.italian:
-        return 'it';
-    }
-  }
+  static const Map<AppLanguage, String> _storageCodes = <AppLanguage, String>{
+    AppLanguage.english: 'en',
+    AppLanguage.italian: 'it',
+  };
+
+  String get storageKey => _storageCodes[this] ?? 'system';
 
   String get localeCode {
-    switch (this) {
-      case AppLanguage.english:
-        return 'en';
-      case AppLanguage.italian:
-        return 'it';
-      case AppLanguage.system:
-        final Locale systemLocale =
-            WidgetsBinding.instance.platformDispatcher.locale;
-        if (systemLocale.languageCode.toLowerCase().startsWith('it')) {
-          return 'it';
-        }
-        return 'en';
+    if (this == AppLanguage.system) {
+      final String systemCode = WidgetsBinding
+          .instance.platformDispatcher.locale.languageCode
+          .toLowerCase();
+      return _storageCodes.values.firstWhere(
+        (String code) => systemCode.startsWith(code),
+        orElse: () => 'en',
+      );
     }
+    return _storageCodes[this] ?? 'en';
   }
 
   Locale? get materialLocale {
-    switch (this) {
-      case AppLanguage.system:
-        return null;
-      case AppLanguage.english:
-        return const Locale('en');
-      case AppLanguage.italian:
-        return const Locale('it');
-    }
+    final String? code = _storageCodes[this];
+    return code == null ? null : Locale(code);
   }
 
   static AppLanguage fromStorageKey(String? raw) {
     final String normalized = (raw ?? '').trim().toLowerCase();
-    switch (normalized) {
-      case 'en':
-        return AppLanguage.english;
-      case 'it':
-        return AppLanguage.italian;
-      case 'system':
-      default:
-        return AppLanguage.system;
-    }
+    return _storageCodes.entries
+        .firstWhere(
+          (MapEntry<AppLanguage, String> e) => e.value == normalized,
+          orElse: () => const MapEntry<AppLanguage, String>(
+            AppLanguage.system,
+            'system',
+          ),
+        )
+        .key;
   }
 }
 
@@ -144,6 +132,16 @@ class AppUxStateStore {
     await prefs.setBool(_onboardingCompletedKey, value);
   }
 
+  static Future<bool> defaultGameSelected() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_defaultGameSelectedKey) ?? false;
+  }
+
+  static Future<void> setDefaultGameSelected(bool value) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_defaultGameSelectedKey, value);
+  }
+
   static Future<Set<String>> loadSeenInfoTips() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final List<String> raw =
@@ -184,6 +182,9 @@ class AppStrings {
       'common.close': 'Close',
       'common.cancel': 'Cancel',
       'common.save': 'Save',
+      'common.create': 'Create',
+      'common.rename': 'Rename',
+      'common.notes': 'Notes',
       'common.clear': 'Clear',
       'common.notNow': 'Not now',
       'common.premium': 'Premium feature',
@@ -215,6 +216,8 @@ class AppStrings {
       'onboarding.title3': 'Review Statistics and Utilities',
       'onboarding.body3':
           'Open matchup history, statistics, notes and sideboard tools anytime.',
+      'onboarding.chooseGame': 'Which game do you play the most?',
+      'onboarding.chooseGameHint': 'You can change the main game in the options',
       'info.matchHistory.title': 'Match History',
       'info.matchHistory.body':
           'This area groups your saved matches and keeps game details in order.',
@@ -242,6 +245,8 @@ class AppStrings {
       'customize.languageSystem': 'System default',
       'customize.languageEnglish': 'English',
       'customize.languageItalian': 'Italiano',
+      'customize.player1Color': 'Player 1 color',
+      'customize.player2Color': 'Player 2 color',
       'customize.colors': 'Colors',
       'customize.bgStart': 'Background start',
       'customize.bgEnd': 'Background end',
@@ -303,6 +308,41 @@ class AppStrings {
       'field.format': 'Format',
       'field.tag': 'Tag',
       'field.gamesCount': '{count} game(s)',
+      'field.matchName': 'Match name',
+      'field.opponentName': 'Opponent name',
+      'field.noFormat': 'No format',
+      'field.addNewFormat': 'Add new format...',
+      'field.noOpponentDeck': 'No opponent deck',
+      'field.addNewDeck': 'Add new deck...',
+      'field.deckInUse': 'Deck in use',
+      'field.noDeck': 'No deck',
+      'field.deckName': 'Deck name',
+      'dialog.matchDetails': 'Match details',
+      'dialog.gameDetails': 'Game details',
+      'game.playerNames': 'Player names',
+      'game.playerName': 'Player {n} name',
+      'game.color': 'Color',
+      'game.endOrResetMatch': 'End or reset match',
+      'game.endOrResetGame': 'End or reset game',
+      'game.saveAndExit': 'Save and exit',
+      'game.sideboardGuide': 'Sideboard Guide',
+      'game.resetWithoutSaving': 'Reset without saving',
+      'game.discardAndExit': 'Discard current game and exit',
+      'game.exitWithoutSaving': 'Exit without saving',
+      'game.win': 'Win',
+      'game.loss': 'Loss',
+      'game.draw': 'Draw',
+      'game.details': 'Details',
+      'game.dice': 'Dice',
+      'game.history': 'History',
+      'game.histShort': 'Hist',
+      'game.mana': 'Mana',
+      'game.counters': 'Counters',
+      'game.cntrShort': 'Cntr',
+      'game.commander': 'Commander',
+      'game.cmdShort': 'Cmd',
+      'game.lpHistory': 'LP History',
+      'common.loadMore': 'Load more',
     },
     'it': <String, String>{
       'app.title': 'TCG Life Counter',
@@ -313,6 +353,9 @@ class AppStrings {
       'common.close': 'Chiudi',
       'common.cancel': 'Annulla',
       'common.save': 'Salva',
+      'common.create': 'Crea',
+      'common.rename': 'Rinomina',
+      'common.notes': 'Note',
       'common.clear': 'Pulisci',
       'common.notNow': 'Non ora',
       'common.premium': 'Funzionalita premium',
@@ -344,6 +387,8 @@ class AppStrings {
       'onboarding.title3': 'Consulta Statistiche e Utility',
       'onboarding.body3':
           'Apri cronologia matchup, statistiche, note e strumenti in ogni momento.',
+      'onboarding.chooseGame': 'Quale gioco giochi di più?',
+      'onboarding.chooseGameHint': 'Puoi cambiare il gioco principale nelle opzioni',
       'info.matchHistory.title': 'Cronologia Match',
       'info.matchHistory.body':
           'Qui trovi i match salvati raggruppati con i dettagli dei game.',
@@ -372,6 +417,8 @@ class AppStrings {
       'customize.languageSystem': 'Default sistema',
       'customize.languageEnglish': 'English',
       'customize.languageItalian': 'Italiano',
+      'customize.player1Color': 'Colore Player 1',
+      'customize.player2Color': 'Colore Player 2',
       'customize.colors': 'Colori',
       'customize.bgStart': 'Sfondo iniziale',
       'customize.bgEnd': 'Sfondo finale',
@@ -431,9 +478,44 @@ class AppStrings {
       'field.opponent': 'Avversario',
       'field.deck': 'Deck',
       'field.opponentDeck': 'Deck Avversario',
-      'field.format': 'Format',
+      'field.format': 'Formato',
       'field.tag': 'Tag',
       'field.gamesCount': '{count} game',
+      'field.matchName': 'Nome partita',
+      'field.opponentName': 'Nome avversario',
+      'field.noFormat': 'Nessun formato',
+      'field.addNewFormat': 'Nuovo formato...',
+      'field.noOpponentDeck': 'Nessun deck avversario',
+      'field.addNewDeck': 'Nuovo deck...',
+      'field.deckInUse': 'Deck in uso',
+      'field.noDeck': 'Nessun deck',
+      'field.deckName': 'Nome deck',
+      'dialog.matchDetails': 'Dettagli della partita',
+      'dialog.gameDetails': 'Dettagli del gioco',
+      'game.playerNames': 'Nomi dei giocatori',
+      'game.playerName': 'Nome Player {n}',
+      'game.color': 'Colore',
+      'game.endOrResetMatch': 'Termina o resetta la partita',
+      'game.endOrResetGame': 'Termina o resetta il gioco',
+      'game.saveAndExit': 'Salva ed esci',
+      'game.sideboardGuide': 'Sideboard',
+      'game.resetWithoutSaving': 'Azzera senza salvare',
+      'game.discardAndExit': 'Scarta il gioco e esci',
+      'game.exitWithoutSaving': 'Esci senza salvare',
+      'game.win': 'Vittoria',
+      'game.loss': 'Sconfitta',
+      'game.draw': 'Pareggio',
+      'game.details': 'Dettagli',
+      'game.dice': 'Dado',
+      'game.history': 'Storico',
+      'game.histShort': 'Stor',
+      'game.mana': 'Mana',
+      'game.counters': 'Segnalini',
+      'game.cntrShort': 'Segn',
+      'game.commander': 'Commander',
+      'game.cmdShort': 'Cmd',
+      'game.lpHistory': 'Storico LP',
+      'common.loadMore': 'Carica altri',
     },
   };
 
@@ -441,9 +523,7 @@ class AppStrings {
     String key, {
     Map<String, Object?> params = const <String, Object?>{},
   }) {
-    final String language = languageCode.toLowerCase().startsWith('it')
-        ? 'it'
-        : 'en';
+    final String language = _catalog.containsKey(languageCode) ? languageCode : 'en';
     final String fallback = _catalog['en']?[key] ?? key;
     String value = _catalog[language]?[key] ?? fallback;
     if (params.isEmpty) {
@@ -701,6 +781,8 @@ class AppSettings {
     required this.backgroundEndColor,
     required this.buttonColor,
     required this.lifePointsBackgroundColor,
+    required this.playerOneColor,
+    required this.playerTwoColor,
   });
 
   factory AppSettings.defaults() {
@@ -713,6 +795,8 @@ class AppSettings {
       backgroundEndColor: Color(0xFF341212),
       buttonColor: Color(0xFF2B2424),
       lifePointsBackgroundColor: Color(0xFF261E1E),
+      playerOneColor: Color(0xFF261E1E),
+      playerTwoColor: Color(0xFF1E2626),
     );
   }
 
@@ -724,6 +808,8 @@ class AppSettings {
   final Color backgroundEndColor;
   final Color buttonColor;
   final Color lifePointsBackgroundColor;
+  final Color playerOneColor;
+  final Color playerTwoColor;
 
   AppSettings copyWith({
     String? playerOneName,
@@ -734,6 +820,8 @@ class AppSettings {
     Color? backgroundEndColor,
     Color? buttonColor,
     Color? lifePointsBackgroundColor,
+    Color? playerOneColor,
+    Color? playerTwoColor,
   }) {
     return AppSettings(
       playerOneName: playerOneName ?? this.playerOneName,
@@ -745,6 +833,8 @@ class AppSettings {
       buttonColor: buttonColor ?? this.buttonColor,
       lifePointsBackgroundColor:
           lifePointsBackgroundColor ?? this.lifePointsBackgroundColor,
+      playerOneColor: playerOneColor ?? this.playerOneColor,
+      playerTwoColor: playerTwoColor ?? this.playerTwoColor,
     );
   }
 
@@ -758,6 +848,8 @@ class AppSettings {
       'backgroundEndColor': backgroundEndColor.toARGB32(),
       'buttonColor': buttonColor.toARGB32(),
       'lifePointsBackgroundColor': lifePointsBackgroundColor.toARGB32(),
+      'playerOneColor': playerOneColor.toARGB32(),
+      'playerTwoColor': playerTwoColor.toARGB32(),
     };
   }
 
@@ -818,6 +910,8 @@ class AppSettings {
         'lifePointsBackgroundColor',
         fallback.lifePointsBackgroundColor,
       ),
+      playerOneColor: parseColor('playerOneColor', fallback.playerOneColor),
+      playerTwoColor: parseColor('playerTwoColor', fallback.playerTwoColor),
     );
   }
 }
@@ -1742,6 +1836,19 @@ extension SupportedTcgX on SupportedTcg {
         return SupportedTcg.yugioh;
     }
   }
+
+  ({Color bgStart, Color bgEnd}) get homePresetColors {
+    switch (this) {
+      case SupportedTcg.yugioh:
+        return (bgStart: const Color(0xFF1A0A0A), bgEnd: const Color(0xFF3D1A1A));
+      case SupportedTcg.mtg:
+        return (bgStart: const Color(0xFF0A0F1A), bgEnd: const Color(0xFF1A2B3D));
+      case SupportedTcg.riftbound:
+        return (bgStart: const Color(0xFF0A1A0A), bgEnd: const Color(0xFF1A3A1A));
+      case SupportedTcg.lorcana:
+        return (bgStart: const Color(0xFF150A1A), bgEnd: const Color(0xFF3D1A50));
+    }
+  }
 }
 
 enum DuelRuleSet { yugioh, mtg }
@@ -1922,6 +2029,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isLoading = true;
   bool _onboardingCompleted = true;
+  bool _defaultGameSelected = true;
   bool _premiumUnlocked = false;
   AppSettings _settings = AppSettings.defaults();
   List<GameRecord> _gameRecords = <GameRecord>[];
@@ -2385,6 +2493,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final bool premiumUnlocked = prefs.getBool(_premiumKey) ?? false;
     final bool onboardingCompleted =
         prefs.getBool(_onboardingCompletedKey) ?? false;
+    final bool defaultGameSelected =
+        prefs.getBool(_defaultGameSelectedKey) ?? false;
     final AppSettings settings = _decodeSettings(prefs.getString(_settingsKey));
     final List<GameRecord> records = _decodeRecords(
       prefs.getString(_recordsKey),
@@ -2405,6 +2515,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _premiumUnlocked = premiumUnlocked;
       _onboardingCompleted = onboardingCompleted;
+      _defaultGameSelected = defaultGameSelected;
       _settings = settings;
       _selectedGame = SupportedTcgX.fromStorageKey(settings.startupTcgKey);
       _gameRecords = records;
@@ -2511,6 +2622,19 @@ class _HomeScreenState extends State<HomeScreen> {
       _onboardingCompleted = true;
     });
     await AppUxStateStore.setOnboardingCompleted(true);
+  }
+
+  Future<void> _completeGameSelection(SupportedTcg game) async {
+    final AppSettings updated = _settings.copyWith(
+      startupTcgKey: game.storageKey,
+    );
+    setState(() {
+      _defaultGameSelected = true;
+      _settings = updated;
+      _selectedGame = game;
+    });
+    await _persistState();
+    await AppUxStateStore.setDefaultGameSelected(true);
   }
 
   Future<bool> _ensurePremiumAccess({required String featureName}) async {
@@ -2659,6 +2783,8 @@ class _HomeScreenState extends State<HomeScreen> {
         );
 
     await _queuedCheckpointSave;
+
+    if (!mounted) return;
 
     final String latestDeckName = duelResult?.deckName.trim() ?? '';
     if (duelResult != null) {
@@ -2828,14 +2954,16 @@ class _HomeScreenState extends State<HomeScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: <Color>[
-              activeSettings.backgroundStartColor,
-              activeSettings.backgroundEndColor,
+              _selectedGame.homePresetColors.bgStart,
+              _selectedGame.homePresetColors.bgEnd,
             ],
           ),
         ),
         child: SafeArea(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
+              : !_defaultGameSelected
+              ? _GameSelectionScreen(onCompleted: _completeGameSelection)
               : !_onboardingCompleted
               ? _AppOnboardingScreen(onCompleted: _completeOnboarding)
               : Padding(
@@ -3129,6 +3257,96 @@ class _AppOnboardingScreenState extends State<_AppOnboardingScreen> {
             child: Text(txt.t(isLast ? 'common.continue' : 'common.next')),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _GameSelectionScreen extends StatelessWidget {
+  const _GameSelectionScreen({required this.onCompleted});
+
+  final Future<void> Function(SupportedTcg) onCompleted;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppStrings txt = context.txt;
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            txt.t('onboarding.chooseGame'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 32),
+          _GameSelectionCard(
+            icon: Icons.flash_on_rounded,
+            label: txt.t('tcg.yugioh'),
+            onTap: () => onCompleted(SupportedTcg.yugioh),
+          ),
+          const SizedBox(height: 16),
+          _GameSelectionCard(
+            icon: Icons.style_rounded,
+            label: txt.t('tcg.mtg'),
+            onTap: () => onCompleted(SupportedTcg.mtg),
+          ),
+          const SizedBox(height: 32),
+          Text(
+            txt.t('onboarding.chooseGameHint'),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.5),
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GameSelectionCard extends StatelessWidget {
+  const _GameSelectionCard({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: const Color(0xFF1E1B1B),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Icon(icon, size: 32),
+              const SizedBox(width: 16),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -4440,7 +4658,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton.tonal(
               onPressed: () => Navigator.of(
@@ -4800,9 +5018,13 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       widget.playerCount,
       (int index) => _defaultPlayerName(index),
     );
-    _playerCardBackgroundColors = List<Color>.filled(
+    _playerCardBackgroundColors = List<Color>.generate(
       widget.playerCount,
-      widget.settings.lifePointsBackgroundColor,
+      (int i) {
+        if (i == 0) return widget.settings.playerOneColor;
+        if (i == 1) return widget.settings.playerTwoColor;
+        return widget.settings.lifePointsBackgroundColor;
+      },
     );
     _lifePoints = List<int>.filled(
       widget.playerCount,
@@ -5657,7 +5879,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(_isMultiplayer ? 'Game details' : 'Match details'),
+          title: Text(context.txt.t(_isMultiplayer ? 'dialog.gameDetails' : 'dialog.matchDetails')),
           content: StatefulBuilder(
             builder: (BuildContext context, StateSetter setDialogState) {
               Future<void> pickPlayerColor(int playerIndex) async {
@@ -5680,33 +5902,33 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                     if (!_isMultiplayer) ...[
                       TextField(
                         controller: matchNameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Match name',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: context.txt.t('field.matchName'),
+                          border: const OutlineInputBorder(),
                           isDense: true,
                         ),
                       ),
                       const SizedBox(height: 10),
                       TextField(
                         controller: opponentController,
-                        decoration: const InputDecoration(
-                          labelText: 'Opponent name',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: context.txt.t('field.opponentName'),
+                          border: const OutlineInputBorder(),
                           isDense: true,
                         ),
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         initialValue: selectedFormat,
-                        decoration: const InputDecoration(
-                          labelText: 'Format',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: context.txt.t('field.format'),
+                          border: const OutlineInputBorder(),
                           isDense: true,
                         ),
                         items: <DropdownMenuItem<String>>[
-                          const DropdownMenuItem<String>(
+                          DropdownMenuItem<String>(
                             value: '',
-                            child: Text('No format'),
+                            child: Text(context.txt.t('field.noFormat')),
                           ),
                           ...formatOptions().map((String format) {
                             return DropdownMenuItem<String>(
@@ -5714,9 +5936,9 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                               child: Text(format),
                             );
                           }),
-                          const DropdownMenuItem<String>(
+                          DropdownMenuItem<String>(
                             value: '__add_format__',
-                            child: Text('Add new format...'),
+                            child: Text(context.txt.t('field.addNewFormat')),
                           ),
                         ],
                         onChanged: (String? value) async {
@@ -5753,15 +5975,15 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         initialValue: selectedOpponentDeckId,
-                        decoration: const InputDecoration(
-                          labelText: 'Opponent deck',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: context.txt.t('field.opponentDeck'),
+                          border: const OutlineInputBorder(),
                           isDense: true,
                         ),
                         items: <DropdownMenuItem<String>>[
-                          const DropdownMenuItem<String>(
+                          DropdownMenuItem<String>(
                             value: '',
-                            child: Text('No opponent deck'),
+                            child: Text(context.txt.t('field.noOpponentDeck')),
                           ),
                           ...opponentDeckOptions().map((SideboardDeck deck) {
                             return DropdownMenuItem<String>(
@@ -5772,9 +5994,9 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                               ),
                             );
                           }),
-                          const DropdownMenuItem<String>(
+                          DropdownMenuItem<String>(
                             value: '__add_opponent_deck__',
-                            child: Text('Add new deck...'),
+                            child: Text(context.txt.t('field.addNewDeck')),
                           ),
                         ],
                         onChanged: (String? value) async {
@@ -5873,15 +6095,15 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                     ],
                     DropdownButtonFormField<String>(
                       initialValue: selectedDeckId,
-                      decoration: const InputDecoration(
-                        labelText: 'Deck in use',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.deckInUse'),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                       items: <DropdownMenuItem<String>>[
-                        const DropdownMenuItem<String>(
+                        DropdownMenuItem<String>(
                           value: '',
-                          child: Text('No deck'),
+                          child: Text(context.txt.t('field.noDeck')),
                         ),
                         ...deckOptions().map((SideboardDeck deck) {
                           return DropdownMenuItem<String>(
@@ -5917,7 +6139,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'Player names',
+                          context.txt.t('game.playerNames'),
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             color: Theme.of(context).colorScheme.primary,
@@ -5937,7 +6159,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                               child: TextField(
                                 controller: playerNameControllers[playerIndex],
                                 decoration: InputDecoration(
-                                  labelText: 'Player ${playerIndex + 1} name',
+                                  labelText: context.txt.t('game.playerName', params: <String, Object?>{'n': playerIndex + 1}),
                                   border: const OutlineInputBorder(),
                                   isDense: true,
                                 ),
@@ -5971,12 +6193,12 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                                   ),
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
-                                    children: const [
-                                      Icon(Icons.palette_outlined, size: 18),
-                                      SizedBox(height: 2),
+                                    children: [
+                                      const Icon(Icons.palette_outlined, size: 18),
+                                      const SizedBox(height: 2),
                                       Text(
-                                        'Color',
-                                        style: TextStyle(
+                                        context.txt.t('game.color'),
+                                        style: const TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.w700,
                                         ),
@@ -6000,11 +6222,11 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
+              child: Text(context.txt.t('common.save')),
             ),
           ],
         );
@@ -6149,8 +6371,8 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
         return AlertDialog(
           title: Text(
             widget.playerCount == 2
-                ? 'End or reset match'
-                : 'End or reset game',
+                ? context.txt.t('game.endOrResetMatch')
+                : context.txt.t('game.endOrResetGame'),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -6160,7 +6382,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                 FilledButton.tonal(
                   onPressed: () => Navigator.of(context).pop('save_exit'),
                   style: FilledButton.styleFrom(backgroundColor: saveExitColor),
-                  child: const Text('Save and exit'),
+                  child: Text(context.txt.t('game.saveAndExit')),
                 ),
                 const SizedBox(height: 8),
               ],
@@ -6170,7 +6392,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                   style: FilledButton.styleFrom(
                     backgroundColor: widget.settings.buttonColor,
                   ),
-                  child: const Text('Sideboard Guide'),
+                  child: Text(context.txt.t('game.sideboardGuide')),
                 ),
                 const SizedBox(height: 8),
               ],
@@ -6180,35 +6402,35 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                 child: Text(
                   fromHome
                       ? (_completedGamesForSession.isNotEmpty
-                            ? 'Discard current game and exit'
-                            : 'Exit without saving')
-                      : 'Reset without saving',
+                            ? context.txt.t('game.discardAndExit')
+                            : context.txt.t('game.exitWithoutSaving'))
+                      : context.txt.t('game.resetWithoutSaving'),
                 ),
               ),
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop('Win'),
                 style: FilledButton.styleFrom(backgroundColor: winColor),
-                child: const Text('Win'),
+                child: Text(context.txt.t('game.win')),
               ),
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop('Loss'),
                 style: FilledButton.styleFrom(backgroundColor: lossColor),
-                child: const Text('Loss'),
+                child: Text(context.txt.t('game.loss')),
               ),
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop('Draw'),
                 style: FilledButton.styleFrom(backgroundColor: drawColor),
-                child: const Text('Draw'),
+                child: Text(context.txt.t('game.draw')),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
           ],
         );
@@ -6616,10 +6838,11 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     final double lpHorizontalPadding = longSide
         ? (ultraTight ? 12 : (tight ? 14 : 18))
         : (dense ? 22 : 16);
-    final String historyLabel = ultraTight ? 'Hist' : 'History';
-    final String manaLabel = ultraTight ? 'Mana' : 'Mana';
-    final String statusLabel = ultraTight ? 'Cntr' : 'Counters';
-    final String commanderLabel = ultraTight ? 'Cmd' : 'Commander';
+    final AppStrings txt = context.txt;
+    final String historyLabel = ultraTight ? txt.t('game.histShort') : txt.t('game.history');
+    final String manaLabel = txt.t('game.mana');
+    final String statusLabel = ultraTight ? txt.t('game.cntrShort') : txt.t('game.counters');
+    final String commanderLabel = ultraTight ? txt.t('game.cmdShort') : txt.t('game.commander');
     final List<String> statusFragments = <String>[
       if (poisonCounters > 0) 'Poison $poisonCounters',
       if (experienceCounters > 0) 'Exp $experienceCounters',
@@ -7870,7 +8093,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                 ),
                 const SizedBox(height: 8),
                 menuButton(
-                  label: 'Details',
+                  label: dialogContext.txt.t('game.details'),
                   icon: Icons.edit_outlined,
                   onPressed: () {
                     Navigator.of(dialogContext).pop();
@@ -7879,7 +8102,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                 ),
                 const SizedBox(height: 8),
                 menuButton(
-                  label: 'Dice',
+                  label: dialogContext.txt.t('game.dice'),
                   icon: Icons.casino_outlined,
                   onPressed: () {
                     Navigator.of(dialogContext).pop();
@@ -9403,7 +9626,7 @@ class _DuelScreenState extends State<DuelScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Match details'),
+          title: Text(context.txt.t('dialog.matchDetails')),
           content: StatefulBuilder(
             builder: (BuildContext context, StateSetter setDialogState) {
               return SingleChildScrollView(
@@ -9412,33 +9635,33 @@ class _DuelScreenState extends State<DuelScreen> {
                   children: [
                     TextField(
                       controller: matchNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Match name',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.matchName'),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: opponentController,
-                      decoration: const InputDecoration(
-                        labelText: 'Opponent name',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.opponentName'),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       initialValue: selectedFormat,
-                      decoration: const InputDecoration(
-                        labelText: 'Format',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.format'),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                       items: <DropdownMenuItem<String>>[
-                        const DropdownMenuItem<String>(
+                        DropdownMenuItem<String>(
                           value: '',
-                          child: Text('No format'),
+                          child: Text(context.txt.t('field.noFormat')),
                         ),
                         ...formatOptions().map((String format) {
                           return DropdownMenuItem<String>(
@@ -9446,9 +9669,9 @@ class _DuelScreenState extends State<DuelScreen> {
                             child: Text(format),
                           );
                         }),
-                        const DropdownMenuItem<String>(
+                        DropdownMenuItem<String>(
                           value: '__add_format__',
-                          child: Text('Add new format...'),
+                          child: Text(context.txt.t('field.addNewFormat')),
                         ),
                       ],
                       onChanged: (String? value) async {
@@ -9485,15 +9708,15 @@ class _DuelScreenState extends State<DuelScreen> {
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       initialValue: selectedOpponentDeckId,
-                      decoration: const InputDecoration(
-                        labelText: 'Opponent deck',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.opponentDeck'),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                       items: <DropdownMenuItem<String>>[
-                        const DropdownMenuItem<String>(
+                        DropdownMenuItem<String>(
                           value: '',
-                          child: Text('No opponent deck'),
+                          child: Text(context.txt.t('field.noOpponentDeck')),
                         ),
                         ...opponentDeckOptions().map((SideboardDeck deck) {
                           return DropdownMenuItem<String>(
@@ -9604,15 +9827,15 @@ class _DuelScreenState extends State<DuelScreen> {
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       initialValue: selectedDeckId,
-                      decoration: const InputDecoration(
-                        labelText: 'Deck in use',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.deckInUse'),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                       items: <DropdownMenuItem<String>>[
-                        const DropdownMenuItem<String>(
+                        DropdownMenuItem<String>(
                           value: '',
-                          child: Text('No deck'),
+                          child: Text(context.txt.t('field.noDeck')),
                         ),
                         ...deckOptions().map((SideboardDeck deck) {
                           return DropdownMenuItem<String>(
@@ -9651,11 +9874,11 @@ class _DuelScreenState extends State<DuelScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
+              child: Text(context.txt.t('common.save')),
             ),
           ],
         );
@@ -9720,7 +9943,7 @@ class _DuelScreenState extends State<DuelScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('End or reset match'),
+          title: Text(context.txt.t('game.endOrResetMatch')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -9729,7 +9952,7 @@ class _DuelScreenState extends State<DuelScreen> {
                 FilledButton.tonal(
                   onPressed: () => Navigator.of(context).pop('save_exit'),
                   style: FilledButton.styleFrom(backgroundColor: saveExitColor),
-                  child: const Text('Save and exit'),
+                  child: Text(context.txt.t('game.saveAndExit')),
                 ),
                 const SizedBox(height: 8),
               ],
@@ -9738,7 +9961,7 @@ class _DuelScreenState extends State<DuelScreen> {
                 style: FilledButton.styleFrom(
                   backgroundColor: widget.settings.buttonColor,
                 ),
-                child: const Text('Sideboard Guide'),
+                child: Text(context.txt.t('game.sideboardGuide')),
               ),
               const SizedBox(height: 8),
               FilledButton.tonal(
@@ -9747,35 +9970,35 @@ class _DuelScreenState extends State<DuelScreen> {
                 child: Text(
                   fromHome
                       ? (_completedGamesForSession.isNotEmpty
-                            ? 'Discard current game and exit'
-                            : 'Exit without saving')
-                      : 'Reset without saving',
+                            ? context.txt.t('game.discardAndExit')
+                            : context.txt.t('game.exitWithoutSaving'))
+                      : context.txt.t('game.resetWithoutSaving'),
                 ),
               ),
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop('Win'),
                 style: FilledButton.styleFrom(backgroundColor: winColor),
-                child: const Text('Win'),
+                child: Text(context.txt.t('game.win')),
               ),
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop('Loss'),
                 style: FilledButton.styleFrom(backgroundColor: lossColor),
-                child: const Text('Loss'),
+                child: Text(context.txt.t('game.loss')),
               ),
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop('Draw'),
                 style: FilledButton.styleFrom(backgroundColor: drawColor),
-                child: const Text('Draw'),
+                child: Text(context.txt.t('game.draw')),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
           ],
         );
@@ -10398,7 +10621,9 @@ class _DuelScreenState extends State<DuelScreen> {
                       vertical: compact ? 6 : 8,
                     ),
                     decoration: BoxDecoration(
-                      color: widget.settings.lifePointsBackgroundColor,
+                      color: player == 1
+                          ? widget.settings.playerOneColor
+                          : widget.settings.playerTwoColor,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: Colors.white.withValues(alpha: 0.12),
@@ -10843,7 +11068,7 @@ class GameHistoryScreen extends StatefulWidget {
 }
 
 class _GameHistoryScreenState extends State<GameHistoryScreen> {
-  static const int _matchPageSize = 20;
+  static const int _matchPageSize = 5;
 
   late List<GameRecord> _records;
   MatchHistorySortMode _matchHistorySortMode = MatchHistorySortMode.date;
@@ -10858,8 +11083,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _matchListController = ScrollController()
-      ..addListener(_handleMatchListScroll);
+    _matchListController = ScrollController();
     _opponentNameFilterController = TextEditingController();
     _records = List<GameRecord>.from(widget.records);
     _records.sort((GameRecord a, GameRecord b) {
@@ -10881,28 +11105,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     });
   }
 
-  void _handleMatchListScroll() {
-    if (!_matchListController.hasClients) {
-      return;
-    }
-    final ScrollPosition position = _matchListController.position;
-    if (position.pixels < position.maxScrollExtent - 240) {
-      return;
-    }
-    final List<MatchRecord> allMatches = _twoPlayerMatchRecords();
-    final int totalMatches = _sortedMatchRecords(
-      _filteredMatchRecords(
-        allMatches,
-        selectedDeckFilter: _selectedMatchDeckFilter,
-        selectedOpponentDeckFilter: _selectedMatchOpponentDeckFilter,
-        selectedFormatFilter: _selectedMatchFormatFilter,
-        selectedTagFilter: _selectedMatchTagFilter,
-        opponentQuery: _opponentNameFilterController.text,
-      ),
-    ).length;
-    if (_visibleMatchCount >= totalMatches) {
-      return;
-    }
+  void _loadMoreMatches(int totalMatches) {
     setState(() {
       _visibleMatchCount = min(
         totalMatches,
@@ -10946,9 +11149,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   @override
   void dispose() {
     _opponentNameFilterController.dispose();
-    _matchListController
-      ..removeListener(_handleMatchListScroll)
-      ..dispose();
+    _matchListController.dispose();
     super.dispose();
   }
 
@@ -11433,7 +11634,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Match details'),
+          title: Text(context.txt.t('dialog.matchDetails')),
           content: StatefulBuilder(
             builder: (BuildContext context, StateSetter setDialogState) {
               return SingleChildScrollView(
@@ -11457,9 +11658,9 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                         isDense: true,
                       ),
                       items: <DropdownMenuItem<String>>[
-                        const DropdownMenuItem<String>(
+                        DropdownMenuItem<String>(
                           value: '',
-                          child: Text('No deck'),
+                          child: Text(context.txt.t('field.noDeck')),
                         ),
                         ...widget.decks.map((SideboardDeck deck) {
                           return DropdownMenuItem<String>(
@@ -11536,11 +11737,11 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
+              child: Text(context.txt.t('common.save')),
             ),
           ],
         );
@@ -11710,7 +11911,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -11824,7 +12025,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -12284,9 +12485,14 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
             itemCount: visibleMatchCount + (hasMoreMatches ? 1 : 0),
             itemBuilder: (BuildContext context, int index) {
               if (index >= visibleMatchCount) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(child: CircularProgressIndicator()),
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: FilledButton.tonal(
+                      onPressed: () => _loadMoreMatches(matches.length),
+                      child: Text(txt.t('common.loadMore')),
+                    ),
+                  ),
                 );
               }
               final MatchRecord match = matches[index];
@@ -12507,7 +12713,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      _formatDateTime(record.createdAt),
+                                      _formatDateTime(record.createdAt, context),
                                       style: TextStyle(
                                         color: Colors.white.withValues(
                                           alpha: 0.7,
@@ -12624,9 +12830,9 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                               isDense: true,
                             ),
                             items: <DropdownMenuItem<String>>[
-                              const DropdownMenuItem<String>(
+                              DropdownMenuItem<String>(
                                 value: '',
-                                child: Text('No deck'),
+                                child: Text(context.txt.t('field.noDeck')),
                               ),
                               ...widget.decks.map((SideboardDeck deck) {
                                 return DropdownMenuItem<String>(
@@ -12680,7 +12886,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                                         Icons.edit_outlined,
                                         size: 16,
                                       ),
-                                      label: const Text('Rename'),
+                                      label: Text(context.txt.t('common.rename')),
                                     ),
                                     TextButton.icon(
                                       onPressed: () => _editNotes(record),
@@ -12688,7 +12894,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                                         Icons.sticky_note_2_outlined,
                                         size: 16,
                                       ),
-                                      label: const Text('Notes'),
+                                      label: Text(context.txt.t('common.notes')),
                                     ),
                                     TextButton.icon(
                                       onPressed: () =>
@@ -12697,7 +12903,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                                         Icons.edit_note_rounded,
                                         size: 16,
                                       ),
-                                      label: const Text('Details'),
+                                      label: Text(context.txt.t('game.details')),
                                     ),
                                     TextButton.icon(
                                       onPressed: () =>
@@ -12706,7 +12912,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                                         Icons.format_list_bulleted_rounded,
                                         size: 16,
                                       ),
-                                      label: const Text('LP History'),
+                                      label: Text(context.txt.t('game.lpHistory')),
                                     ),
                                   ],
                                 ),
@@ -12999,7 +13205,7 @@ class _TwoPlayerMatchDetailScreenState
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Match details'),
+          title: Text(context.txt.t('dialog.matchDetails')),
           content: StatefulBuilder(
             builder: (BuildContext context, StateSetter setDialogState) {
               return SingleChildScrollView(
@@ -13008,9 +13214,9 @@ class _TwoPlayerMatchDetailScreenState
                   children: [
                     TextField(
                       controller: matchNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Match name',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.matchName'),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                     ),
@@ -13028,15 +13234,15 @@ class _TwoPlayerMatchDetailScreenState
                       initialValue: selectedFormat.isEmpty
                           ? null
                           : selectedFormat,
-                      decoration: const InputDecoration(
-                        labelText: 'Format',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.format'),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                       items: <DropdownMenuItem<String>>[
-                        const DropdownMenuItem<String>(
+                        DropdownMenuItem<String>(
                           value: '',
-                          child: Text('No format'),
+                          child: Text(context.txt.t('field.noFormat')),
                         ),
                         ...formatOptions().map((String format) {
                           return DropdownMenuItem<String>(
@@ -13044,9 +13250,9 @@ class _TwoPlayerMatchDetailScreenState
                             child: Text(format),
                           );
                         }),
-                        const DropdownMenuItem<String>(
+                        DropdownMenuItem<String>(
                           value: '__add_format__',
-                          child: Text('Add new format...'),
+                          child: Text(context.txt.t('field.addNewFormat')),
                         ),
                       ],
                       onChanged: (String? nextValue) async {
@@ -13083,15 +13289,15 @@ class _TwoPlayerMatchDetailScreenState
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       initialValue: selectedDeckId,
-                      decoration: const InputDecoration(
-                        labelText: 'Deck',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.deck'),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                       items: <DropdownMenuItem<String>>[
-                        const DropdownMenuItem<String>(
+                        DropdownMenuItem<String>(
                           value: '',
-                          child: Text('No deck'),
+                          child: Text(context.txt.t('field.noDeck')),
                         ),
                         ...deckOptions().map((SideboardDeck deck) {
                           return DropdownMenuItem<String>(
@@ -13115,15 +13321,15 @@ class _TwoPlayerMatchDetailScreenState
                       initialValue: selectedOpponentDeckId.isEmpty
                           ? null
                           : selectedOpponentDeckId,
-                      decoration: const InputDecoration(
-                        labelText: 'Opponent Deck',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.opponentDeck'),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                       items: <DropdownMenuItem<String>>[
-                        const DropdownMenuItem<String>(
+                        DropdownMenuItem<String>(
                           value: '',
-                          child: Text('No opponent deck'),
+                          child: Text(context.txt.t('field.noOpponentDeck')),
                         ),
                         ...opponentDeckOptions().map((SideboardDeck deck) {
                           return DropdownMenuItem<String>(
@@ -13159,11 +13365,11 @@ class _TwoPlayerMatchDetailScreenState
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
+              child: Text(context.txt.t('common.save')),
             ),
           ],
         );
@@ -13251,7 +13457,7 @@ class _TwoPlayerMatchDetailScreenState
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Game details'),
+          title: Text(context.txt.t('dialog.gameDetails')),
           content: StatefulBuilder(
             builder: (BuildContext context, StateSetter setDialogState) {
               return SingleChildScrollView(
@@ -13316,11 +13522,11 @@ class _TwoPlayerMatchDetailScreenState
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
+              child: Text(context.txt.t('common.save')),
             ),
           ],
         );
@@ -13357,7 +13563,7 @@ class _TwoPlayerMatchDetailScreenState
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.txt.t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -13477,16 +13683,16 @@ class _TwoPlayerMatchDetailScreenState
                     ),
                     const SizedBox(height: 8),
                     _buildSummaryRow(
-                      label: 'Opponent',
+                      label: context.txt.t('field.opponent'),
                       value: _metadata.opponentName,
                     ),
-                    _buildSummaryRow(label: 'Deck', value: _metadata.deckName),
+                    _buildSummaryRow(label: context.txt.t('field.deck'), value: _metadata.deckName),
                     _buildSummaryRow(
-                      label: 'Opponent Deck',
+                      label: context.txt.t('field.opponentDeck'),
                       value: _metadata.opponentDeckName,
                     ),
-                    _buildSummaryRow(label: 'Format', value: _metadata.format),
-                    _buildSummaryRow(label: 'Tag', value: _metadata.tag),
+                    _buildSummaryRow(label: context.txt.t('field.format'), value: _metadata.format),
+                    _buildSummaryRow(label: context.txt.t('field.tag'), value: _metadata.tag),
                     const SizedBox(height: 10),
                     Text(
                       'Edit match changes metadata only. Match result is calculated from the game results below.',
@@ -13610,7 +13816,7 @@ class _TwoPlayerMatchDetailScreenState
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          _formatDateTime(game.createdAt),
+                          _formatDateTime(game.createdAt, context),
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 12,
@@ -13641,7 +13847,7 @@ class _TwoPlayerMatchDetailScreenState
                                       Icons.edit_note_rounded,
                                       size: 16,
                                     ),
-                                    label: const Text('Details'),
+                                    label: Text(context.txt.t('game.details')),
                                   ),
                                   TextButton.icon(
                                     onPressed: () => _editNotes(game),
@@ -13649,7 +13855,7 @@ class _TwoPlayerMatchDetailScreenState
                                       Icons.sticky_note_2_outlined,
                                       size: 16,
                                     ),
-                                    label: const Text('Notes'),
+                                    label: Text(context.txt.t('common.notes')),
                                   ),
                                   TextButton.icon(
                                     onPressed: () =>
@@ -13658,7 +13864,7 @@ class _TwoPlayerMatchDetailScreenState
                                       Icons.format_list_bulleted_rounded,
                                       size: 16,
                                     ),
-                                    label: const Text('LP History'),
+                                    label: Text(context.txt.t('game.lpHistory')),
                                   ),
                                 ],
                               ),
@@ -13707,12 +13913,15 @@ class SideboardDeckListScreen extends StatefulWidget {
 }
 
 class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
+  static const int _deckPageSize = 5;
+
   late List<SideboardDeck> _decks;
   late List<GameRecord> _records;
   SideboardDeckSortMode _sortMode = SideboardDeckSortMode.createdAt;
   bool _showFavoritesOnly = false;
   String _selectedDeckFormatFilter = '';
   String _selectedDeckTagFilter = '';
+  int _visibleDeckCount = _deckPageSize;
 
   @override
   void initState() {
@@ -13869,7 +14078,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                           });
                         },
                         decoration: InputDecoration(
-                          labelText: 'Deck name',
+                          labelText: context.txt.t('field.deckName'),
                           errorText: nameErrorText,
                           border: const OutlineInputBorder(),
                           isDense: true,
@@ -13878,10 +14087,10 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                       const SizedBox(height: 10),
                       TextField(
                         controller: formatController,
-                        decoration: const InputDecoration(
-                          labelText: 'Format',
+                        decoration: InputDecoration(
+                          labelText: context.txt.t('field.format'),
                           hintText: 'Modern, Commander, Edison...',
-                          border: OutlineInputBorder(),
+                          border: const OutlineInputBorder(),
                           isDense: true,
                         ),
                       ),
@@ -13921,7 +14130,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('Cancel'),
+                    child: Text(context.txt.t('common.cancel')),
                   ),
                   FilledButton(
                     onPressed: () {
@@ -13945,7 +14154,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                       }
                       Navigator.of(context).pop(true);
                     },
-                    child: Text(initialDeck == null ? 'Create' : 'Save'),
+                    child: Text(initialDeck == null ? context.txt.t('common.create') : context.txt.t('common.save')),
                   ),
                 ],
               );
@@ -14327,6 +14536,8 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
       selectedFormatFilter: effectiveFormatFilter,
       selectedTagFilter: effectiveTagFilter,
     );
+    final int visibleDeckCount = min(sortedDecks.length, _visibleDeckCount);
+    final bool hasMoreDecks = visibleDeckCount < sortedDecks.length;
 
     return PopScope(
       canPop: false,
@@ -14410,6 +14621,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                                 }
                                 setState(() {
                                   _sortMode = mode;
+                                  _visibleDeckCount = _deckPageSize;
                                 });
                               },
                             ),
@@ -14452,6 +14664,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                                   setState(() {
                                     _selectedDeckFormatFilter = (value ?? '')
                                         .trim();
+                                    _visibleDeckCount = _deckPageSize;
                                   });
                                 },
                               ),
@@ -14487,6 +14700,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                                   setState(() {
                                     _selectedDeckTagFilter = (value ?? '')
                                         .trim();
+                                    _visibleDeckCount = _deckPageSize;
                                   });
                                 },
                               ),
@@ -14506,6 +14720,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                                       onSelected: (bool selected) {
                                         setState(() {
                                           _showFavoritesOnly = selected;
+                                          _visibleDeckCount = _deckPageSize;
                                         });
                                       },
                                     ),
@@ -14568,8 +14783,24 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                               horizontal: 12,
                               vertical: 8,
                             ),
-                            itemCount: sortedDecks.length,
+                            itemCount: visibleDeckCount + (hasMoreDecks ? 1 : 0),
                             itemBuilder: (BuildContext context, int index) {
+                              if (index >= visibleDeckCount) {
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  child: Center(
+                                    child: FilledButton.tonal(
+                                      onPressed: () => setState(() {
+                                        _visibleDeckCount = min(
+                                          sortedDecks.length,
+                                          _visibleDeckCount + _deckPageSize,
+                                        );
+                                      }),
+                                      child: Text(txt.t('common.loadMore')),
+                                    ),
+                                  ),
+                                );
+                              }
                               final SideboardDeck deck = sortedDecks[index];
                               final int matchupCount = deck.matchups.length;
                               final String matchupLabel = matchupCount == 1
@@ -14752,6 +14983,7 @@ class _SideboardMatchupListScreenState
 
   @override
   Widget build(BuildContext context) {
+    final AppStrings txt = context.txt;
     final String formatLabel = widget.deck.format.trim().isEmpty
         ? '-'
         : widget.deck.format.trim();
@@ -14796,7 +15028,7 @@ class _SideboardMatchupListScreenState
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Choose a section',
+                        txt.t('section.chooseSection'),
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.7),
                           fontSize: 12,
@@ -14809,28 +15041,28 @@ class _SideboardMatchupListScreenState
               const SizedBox(height: 12),
               _DeckSectionButton(
                 icon: Icons.sticky_note_2_outlined,
-                title: 'User Notes',
+                title: txt.t('section.userNotes'),
                 subtitle: 'Write and update notes for this deck',
                 onTap: _openUserNotes,
               ),
               const SizedBox(height: 10),
               _DeckSectionButton(
                 icon: Icons.history_rounded,
-                title: 'Matchup History',
+                title: txt.t('section.matchupHistory'),
                 subtitle: 'Saved matches played with this deck',
                 onTap: _openMatchupHistory,
               ),
               const SizedBox(height: 10),
               _DeckSectionButton(
                 icon: Icons.menu_book_rounded,
-                title: 'Sideboard Plans',
+                title: txt.t('section.sideboardPlans'),
                 subtitle: 'Manage side in/out plans by matchup',
                 onTap: _openSideboardPlans,
               ),
               const SizedBox(height: 10),
               _DeckSectionButton(
                 icon: Icons.query_stats_rounded,
-                title: 'Statistics',
+                title: txt.t('section.statistics'),
                 subtitle: 'Deck vs deck results from saved matches',
                 onTap: _openStatistics,
               ),
@@ -14925,7 +15157,7 @@ class _DeckUserNotesScreenState extends State<_DeckUserNotesScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('User Notes'),
+          title: Text(context.txt.t('section.userNotes')),
           leading: IconButton(
             onPressed: _closeWithSave,
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
@@ -15241,6 +15473,7 @@ class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppStrings txt = context.txt;
     final List<SideboardMatchup> sortedMatchups = _sortedMatchups();
     final List<MatchRecord> linkedMatches = _linkedMatchRecords();
     final bool showSideboardPlans =
@@ -15256,7 +15489,7 @@ class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(
-            showSideboardPlans ? 'Sideboard Plans' : 'Matchup History',
+            txt.t(showSideboardPlans ? 'section.sideboardPlans' : 'section.matchupHistory'),
           ),
           leading: IconButton(
             onPressed: _closeWithResult,
@@ -15410,7 +15643,7 @@ class _DeckMatchupHistoryScreenState extends State<_DeckMatchupHistoryScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _formatDateTime(match.createdAt),
+                            _formatDateTime(match.createdAt, context),
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.white.withValues(alpha: 0.7),
@@ -15590,6 +15823,7 @@ class _DeckStatisticsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppStrings txt = context.txt;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) {
         return;
@@ -15606,11 +15840,11 @@ class _DeckStatisticsScreen extends StatelessWidget {
     });
     final List<_DeckStatisticsRow> rows = _statsRows();
     return Scaffold(
-      appBar: AppBar(title: const Text('Statistics')),
+      appBar: AppBar(title: Text(txt.t('statistics.title'))),
       body: rows.isEmpty
           ? Center(
               child: Text(
-                'No match data for this deck yet.',
+                txt.t('statistics.empty'),
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.74)),
               ),
             )
@@ -15634,26 +15868,29 @@ class _DeckStatisticsScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'vs ${row.opponentDeck}',
+                          txt.t(
+                            'statistics.vs',
+                            params: <String, Object?>{'deck': row.opponentDeck},
+                          ),
                           style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 16,
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Text('Matches: ${row.matches}'),
+                        Text(txt.t('statistics.matches', params: <String, Object?>{'count': row.matches})),
                         const SizedBox(height: 2),
-                        Text('Wins: ${row.wins}'),
+                        Text(txt.t('statistics.wins', params: <String, Object?>{'count': row.wins})),
                         const SizedBox(height: 2),
-                        Text('Losses: ${row.losses}'),
+                        Text(txt.t('statistics.losses', params: <String, Object?>{'count': row.losses})),
                         if (row.draws > 0) ...[
                           const SizedBox(height: 2),
-                          Text('Draws: ${row.draws}'),
+                          Text(txt.t('statistics.draws', params: <String, Object?>{'count': row.draws})),
                         ],
                         const SizedBox(height: 6),
-                        Text('Winrate: ${winRate.toStringAsFixed(1)}%'),
+                        Text(txt.t('statistics.winrate', params: <String, Object?>{'value': winRate.toStringAsFixed(1)})),
                         const SizedBox(height: 2),
-                        Text('Loss rate: ${lossRate.toStringAsFixed(1)}%'),
+                        Text(txt.t('statistics.lossRate', params: <String, Object?>{'value': lossRate.toStringAsFixed(1)})),
                       ],
                     ),
                   ),
@@ -15957,11 +16194,11 @@ class _TextPromptDialogState extends State<_TextPromptDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(context.txt.t('common.cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_controller.text),
-          child: const Text('Save'),
+          child: Text(context.txt.t('common.save')),
         ),
       ],
     );
@@ -15985,6 +16222,8 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
   late Color _backgroundEndColor;
   late Color _buttonColor;
   late Color _lifePointsBackgroundColor;
+  late Color _playerOneColor;
+  late Color _playerTwoColor;
   late SupportedTcg _startupTcg;
   late AppLanguage _appLanguage;
 
@@ -15999,6 +16238,8 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
     _buttonColor = widget.initialSettings.buttonColor;
     _lifePointsBackgroundColor =
         widget.initialSettings.lifePointsBackgroundColor;
+    _playerOneColor = widget.initialSettings.playerOneColor;
+    _playerTwoColor = widget.initialSettings.playerTwoColor;
     _startupTcg = SupportedTcgX.fromStorageKey(
       widget.initialSettings.startupTcgKey,
     );
@@ -16030,6 +16271,8 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
       backgroundEndColor: _backgroundEndColor,
       buttonColor: _buttonColor,
       lifePointsBackgroundColor: _lifePointsBackgroundColor,
+      playerOneColor: _playerOneColor,
+      playerTwoColor: _playerTwoColor,
     );
   }
 
@@ -16127,6 +16370,26 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
                 labelText: txt.t('customize.player1Name'),
                 border: const OutlineInputBorder(),
               ),
+            ),
+            const SizedBox(height: 14),
+            _buildColorPicker(
+              label: txt.t('customize.player1Color'),
+              selectedColor: _playerOneColor,
+              onChanged: (Color color) {
+                setState(() {
+                  _playerOneColor = color;
+                });
+              },
+            ),
+            const SizedBox(height: 14),
+            _buildColorPicker(
+              label: txt.t('customize.player2Color'),
+              selectedColor: _playerTwoColor,
+              onChanged: (Color color) {
+                setState(() {
+                  _playerTwoColor = color;
+                });
+              },
             ),
             const SizedBox(height: 20),
             Text(

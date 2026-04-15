@@ -1,0 +1,219 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#060C18"/>
+      <stop offset="100%" stop-color="#0E1C2E"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="790" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1A4F78"/>
+      <stop offset="100%" stop-color="#091520"/>
+    </linearGradient>
+    <linearGradient id="boat" x1="0" y1="758" x2="0" y2="858" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#A0521E"/>
+      <stop offset="100%" stop-color="#5C2E0E"/>
+    </linearGradient>
+    <linearGradient id="skin" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#F5C5A0"/>
+      <stop offset="100%" stop-color="#D48B62"/>
+    </linearGradient>
+    <linearGradient id="hat" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#14122A"/>
+      <stop offset="100%" stop-color="#0A0918"/>
+    </linearGradient>
+    <linearGradient id="coat" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#1E2A48"/>
+      <stop offset="100%" stop-color="#0F1526"/>
+    </linearGradient>
+    <linearGradient id="brass1" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#F0D060"/>
+      <stop offset="50%" stop-color="#C89010"/>
+      <stop offset="100%" stop-color="#8B6000"/>
+    </linearGradient>
+    <radialGradient id="lens" cx="35%" cy="32%" r="65%" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#80D8F8"/>
+      <stop offset="45%" stop-color="#1060A8"/>
+      <stop offset="100%" stop-color="#020810"/>
+    </radialGradient>
+    <radialGradient id="moon" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#F0E8C8" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#F0E8C8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ── Background sky ── -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- Moon glow -->
+  <circle cx="820" cy="115" r="80" fill="url(#moon)"/>
+  <circle cx="820" cy="115" r="42" fill="#F0E8C8" opacity="0.12"/>
+
+  <!-- Stars -->
+  <g fill="#FFFFFF">
+    <circle cx="80"  cy="75"  r="2.8" opacity="0.9"/>
+    <circle cx="196" cy="148" r="1.8" opacity="0.6"/>
+    <circle cx="340" cy="65"  r="2.2" opacity="0.8"/>
+    <circle cx="640" cy="90"  r="1.6" opacity="0.7"/>
+    <circle cx="940" cy="58"  r="2.5" opacity="0.85"/>
+    <circle cx="960" cy="200" r="1.8" opacity="0.6"/>
+    <circle cx="105" cy="310" r="1.4" opacity="0.5"/>
+    <circle cx="970" cy="340" r="2"   opacity="0.65"/>
+    <circle cx="55"  cy="430" r="1.2" opacity="0.4"/>
+    <circle cx="490" cy="55"  r="1.5" opacity="0.55"/>
+  </g>
+
+  <!-- ── Water ── -->
+  <path d="M0 800 Q256 778 512 800 Q768 822 1024 800 L1024 1024 L0 1024 Z" fill="url(#water)"/>
+  <path d="M0 800 Q256 778 512 800 Q768 822 1024 800"
+        fill="none" stroke="#5BC8F0" stroke-width="3.5" opacity="0.45"/>
+  <path d="M0 832 Q128 820 256 832 Q384 844 512 832 Q640 820 768 832 Q896 844 1024 832"
+        fill="none" stroke="#5BC8F0" stroke-width="2" opacity="0.25"/>
+
+  <!-- ── Boat hull ── -->
+  <path d="M238 772 Q258 852 512 868 Q766 852 786 772 Z" fill="url(#boat)"/>
+  <!-- Boat top rail -->
+  <rect x="230" y="760" width="564" height="24" rx="10" fill="#B05820"/>
+  <!-- Plank lines -->
+  <g stroke="#6B3010" stroke-width="2.5" opacity="0.4">
+    <line x1="358" y1="766" x2="334" y2="866"/>
+    <line x1="456" y1="766" x2="444" y2="868"/>
+    <line x1="512" y1="766" x2="512" y2="868"/>
+    <line x1="568" y1="766" x2="580" y2="868"/>
+    <line x1="666" y1="766" x2="690" y2="866"/>
+  </g>
+
+  <!-- ── Pirate coat / body ── -->
+  <path d="M368 706 L368 772 L656 772 L656 706 Q656 622 512 610 Q368 622 368 706 Z"
+        fill="url(#coat)"/>
+  <!-- White shirt front -->
+  <path d="M512 610 L472 694 L512 714 L552 694 Z" fill="#E8E8DC"/>
+  <!-- Gold coat buttons -->
+  <circle cx="512" cy="660" r="8.5" fill="#D4A010"/>
+  <circle cx="512" cy="704" r="8.5" fill="#D4A010"/>
+  <circle cx="512" cy="748" r="8.5" fill="#D4A010"/>
+  <!-- Epaulettes -->
+  <path d="M368 652 Q316 640 305 672 Q316 705 368 698" fill="#C09010"/>
+  <path d="M656 652 Q708 640 719 672 Q708 705 656 698" fill="#C09010"/>
+  <g stroke="#E0B820" stroke-width="3.5" stroke-linecap="round">
+    <line x1="312" y1="660" x2="306" y2="693"/>
+    <line x1="323" y1="656" x2="315" y2="690"/>
+    <line x1="334" y1="653" x2="326" y2="688"/>
+    <line x1="712" y1="660" x2="718" y2="693"/>
+    <line x1="701" y1="656" x2="709" y2="690"/>
+    <line x1="690" y1="653" x2="698" y2="688"/>
+  </g>
+
+  <!-- ── Neck ── -->
+  <rect x="480" y="558" width="64" height="68" rx="14" fill="url(#skin)"/>
+
+  <!-- ── Head ── -->
+  <ellipse cx="512" cy="454" rx="150" ry="160" fill="url(#skin)"/>
+
+  <!-- Ears -->
+  <ellipse cx="365" cy="456" rx="23" ry="30" fill="url(#skin)"/>
+  <ellipse cx="659" cy="456" rx="23" ry="30" fill="url(#skin)"/>
+
+  <!-- ── Eye patch (viewer's left) ── -->
+  <ellipse cx="420" cy="442" rx="44" ry="31" fill="#111118"/>
+  <!-- Patch strap -->
+  <path d="M380 428 Q360 396 394 364" stroke="#111118" stroke-width="5.5"
+        fill="none" stroke-linecap="round"/>
+  <path d="M462 428 Q482 400 470 366" stroke="#111118" stroke-width="5.5"
+        fill="none" stroke-linecap="round"/>
+
+  <!-- ── Visible eye (right, squinting through scope) ── -->
+  <ellipse cx="592" cy="448" rx="27" ry="21" fill="#FFFFFF"/>
+  <circle cx="590" cy="450" r="15" fill="#2A1205"/>
+  <circle cx="586" cy="446" r="6.5" fill="#080502"/>
+  <circle cx="583" cy="443" r="3"   fill="#FFFFFF"/>
+
+  <!-- Eyebrows -->
+  <path d="M390 404 Q424 388 462 400" stroke="#5A2E10" stroke-width="6.5"
+        fill="none" stroke-linecap="round"/>
+  <path d="M560 404 Q594 388 630 400" stroke="#5A2E10" stroke-width="6.5"
+        fill="none" stroke-linecap="round"/>
+
+  <!-- Nose -->
+  <ellipse cx="510" cy="492" rx="18" ry="11" fill="#D4906A" opacity="0.65"/>
+
+  <!-- Mouth — grin -->
+  <path d="M472 540 Q512 566 552 540" stroke="#A04E38" stroke-width="4.5"
+        fill="none" stroke-linecap="round"/>
+  <!-- Tooth hint -->
+  <path d="M486 542 Q512 558 538 542" fill="#FFFFFA" opacity="0.45"/>
+
+  <!-- Beard shadow -->
+  <ellipse cx="512" cy="532" rx="125" ry="54" fill="#3A200A" opacity="0.22"/>
+
+  <!-- Scar -->
+  <line x1="598" y1="490" x2="618" y2="520" stroke="#C07858" stroke-width="2.5" opacity="0.55"/>
+
+  <!-- ── Telescope ── -->
+  <!-- Segments grow larger toward the right (toward the viewer) -->
+  <!-- Segment A — near eye, smallest -->
+  <rect x="624" y="432" width="58" height="38" rx="6"  fill="#A07808"/>
+  <!-- Segment B — medium -->
+  <rect x="682" y="419" width="72" height="64" rx="7"  fill="#C09010"/>
+  <!-- Segment C — largest, closest to viewer -->
+  <rect x="754" y="402" width="88" height="98" rx="9"  fill="url(#brass1)"/>
+  <!-- Brass ring highlights -->
+  <rect x="680" y="419" width="7" height="64" rx="3" fill="#F0D050"/>
+  <rect x="752" y="402" width="7" height="98" rx="3" fill="#F0D050"/>
+
+  <!-- Lens front -->
+  <circle cx="848" cy="451" r="54" fill="#0A0A1A" stroke="#D4A810" stroke-width="7"/>
+  <circle cx="848" cy="451" r="47" fill="url(#lens)"/>
+  <!-- Lens highlight -->
+  <ellipse cx="832" cy="435" rx="14" ry="9" fill="#FFFFFF" opacity="0.24"
+           transform="rotate(-25 832 435)"/>
+
+  <!-- Hand gripping telescope -->
+  <ellipse cx="695" cy="480" rx="32" ry="20" fill="url(#skin)"/>
+  <g fill="url(#skin)">
+    <rect x="656" y="460" width="20" height="13" rx="6.5"/>
+    <rect x="656" y="473" width="20" height="13" rx="6.5"/>
+    <rect x="656" y="486" width="20" height="13" rx="6.5"/>
+  </g>
+
+  <!-- ── Tricorn hat ── -->
+  <!-- Brim ellipse -->
+  <ellipse cx="512" cy="324" rx="192" ry="40" fill="url(#hat)"/>
+  <!-- Crown -->
+  <path d="M325 324 Q362 155 512 128 Q662 155 699 324 Z" fill="url(#hat)"/>
+  <!-- Gold brim trim -->
+  <path d="M325 336 Q512 362 699 336" stroke="#C89010" stroke-width="5.5" fill="none"/>
+  <!-- Hat band -->
+  <path d="M348 322 Q512 342 676 322 Q668 290 512 276 Q356 290 348 322" fill="#B08010"/>
+
+  <!-- Skull & crossbones on hat crown -->
+  <ellipse cx="512" cy="222" rx="36" ry="32" fill="#F2EFE0"/>
+  <ellipse cx="512" cy="242" rx="25" ry="16" fill="#F2EFE0"/>
+  <ellipse cx="500" cy="216" rx="9.5" ry="11" fill="#0A0918"/>
+  <ellipse cx="524" cy="216" rx="9.5" ry="11" fill="#0A0918"/>
+  <ellipse cx="512" cy="232" rx="5.5" ry="4.5" fill="#0A0918"/>
+  <g fill="#0A0918">
+    <rect x="495" y="240" width="6.5" height="11" rx="2"/>
+    <rect x="505" y="240" width="6.5" height="11" rx="2"/>
+    <rect x="515" y="240" width="6.5" height="11" rx="2"/>
+    <rect x="525" y="240" width="6.5" height="11" rx="2"/>
+  </g>
+  <!-- Crossbones -->
+  <g stroke="#F2EFE0" stroke-width="5.5" stroke-linecap="round">
+    <line x1="486" y1="262" x2="538" y2="286"/>
+    <line x1="538" y1="262" x2="486" y2="286"/>
+  </g>
+  <g fill="#F2EFE0">
+    <circle cx="484" cy="261" r="7"/>
+    <circle cx="540" cy="261" r="7"/>
+    <circle cx="484" cy="287" r="7"/>
+    <circle cx="540" cy="287" r="7"/>
+  </g>
+
+  <!-- Feather in hat (left side) -->
+  <path d="M325 305 Q228 238 252 148 Q264 98 286 76"
+        stroke="#D4C080" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+  <path d="M325 305 Q210 252 240 158 Q254 108 278 84"
+        stroke="#B8A860" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M325 305 Q192 266 228 168 Q244 118 270 92"
+        stroke="#A09050" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+
+</svg>
