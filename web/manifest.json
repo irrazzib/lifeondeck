@@ -1,11 +1,11 @@
 {
-    "name": "TCG Life Counter",
-    "short_name": "TCG Counter",
+    "name": "Life on Deck",
+    "short_name": "Life on Deck",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1a1a2e",
+    "theme_color": "#1a1a2e",
+    "description": "Conta i punti vita per MTG, Pokemon e altri giochi di carte",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
