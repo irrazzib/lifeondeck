@@ -4,7 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:yugi_life_counter/main.dart';
+import 'package:yugi_life_counter/app.dart';
+import 'package:yugi_life_counter/core/constants.dart';
+import 'package:yugi_life_counter/models/app_settings.dart';
+import 'package:yugi_life_counter/models/game_record.dart';
+import 'package:yugi_life_counter/models/sideboard.dart';
+import 'package:yugi_life_counter/screens/history/game_history_screen.dart';
+import 'package:yugi_life_counter/screens/sideboard/sideboard_deck_list_screen.dart';
 
 void main() {
   testWidgets('Home screen loads after stored onboarding is completed', (
