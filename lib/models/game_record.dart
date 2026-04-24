@@ -28,6 +28,7 @@ class GameRecord {
     this.opponentDeckId = '',
     this.opponentDeckName = '',
     this.matchTag = '',
+    this.matchDate = '',
   });
 
   final String id;
@@ -50,6 +51,7 @@ class GameRecord {
   final String opponentDeckId;
   final String opponentDeckName;
   final String matchTag;
+  final String matchDate;
 
   GameRecord copyWith({
     String? id,
@@ -72,6 +74,7 @@ class GameRecord {
     String? opponentDeckId,
     String? opponentDeckName,
     String? matchTag,
+    String? matchDate,
   }) {
     return GameRecord(
       id: id ?? this.id,
@@ -94,6 +97,7 @@ class GameRecord {
       opponentDeckId: opponentDeckId ?? this.opponentDeckId,
       opponentDeckName: opponentDeckName ?? this.opponentDeckName,
       matchTag: matchTag ?? this.matchTag,
+      matchDate: matchDate ?? this.matchDate,
     );
   }
 
@@ -119,6 +123,7 @@ class GameRecord {
       'opponentDeckId': opponentDeckId,
       'opponentDeckName': opponentDeckName,
       'matchTag': matchTag,
+      'matchDate': matchDate,
     };
   }
 
@@ -156,6 +161,7 @@ class GameRecord {
     final String opponentDeckName =
         ((json['opponentDeckName'] as String?) ?? '').trim();
     final String matchTag = ((json['matchTag'] as String?) ?? '').trim();
+    final String matchDate = ((json['matchDate'] as String?) ?? '').trim();
     final bool hasRawTcgKey =
         json['tcgKey'] is String &&
         (json['tcgKey'] as String).trim().isNotEmpty;
@@ -230,6 +236,7 @@ class GameRecord {
       opponentDeckId: opponentDeckId,
       opponentDeckName: opponentDeckName,
       matchTag: matchTag,
+      matchDate: matchDate,
     );
   }
 }

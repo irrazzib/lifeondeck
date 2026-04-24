@@ -9,6 +9,7 @@ import '../../l10n/app_strings.dart';
 import '../../models/app_settings.dart';
 import '../../models/game_record.dart';
 import '../../models/sideboard.dart';
+import '../../widgets/clearable_text_field.dart';
 import '../../widgets/text_prompt_dialog.dart';
 import '../../core/ux_state.dart';
 import '../mtg/mtg_duel_screen.dart';
@@ -1455,7 +1456,7 @@ class _DuelScreenState extends State<DuelScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextField(
+                    ClearableTextField(
                       controller: matchNameController,
                       decoration: InputDecoration(
                         labelText: context.txt.t('field.matchName'),
@@ -1464,7 +1465,7 @@ class _DuelScreenState extends State<DuelScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    TextField(
+                    ClearableTextField(
                       controller: opponentController,
                       decoration: InputDecoration(
                         labelText: context.txt.t('field.opponentName'),
@@ -1613,7 +1614,7 @@ class _DuelScreenState extends State<DuelScreen> {
                       },
                     ),
                     const SizedBox(height: 10),
-                    TextField(
+                    ClearableTextField(
                       controller: tagController,
                       decoration: const InputDecoration(
                         labelText: 'Tag',

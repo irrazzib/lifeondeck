@@ -177,6 +177,7 @@ class _DeckMatchupHistoryScreenState extends State<DeckMatchupHistoryScreen> {
             opponentDeckName: opponentDeckName,
             format: format,
             tag: tag,
+            matchDate: null,
           ),
           createdAt: createdAt,
           updatedAt: updatedAt,

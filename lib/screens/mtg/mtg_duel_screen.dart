@@ -9,6 +9,7 @@ import '../../l10n/app_strings.dart';
 import '../../models/app_settings.dart';
 import '../../models/game_record.dart';
 import '../../models/sideboard.dart';
+import '../../widgets/clearable_text_field.dart';
 import '../../widgets/text_prompt_dialog.dart';
 import 'mtg_duel_setup_screen.dart';
 import '../../core/ux_state.dart';
@@ -1499,7 +1500,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (!_isMultiplayer) ...[
-                      TextField(
+                      ClearableTextField(
                         controller: matchNameController,
                         decoration: InputDecoration(
                           labelText: context.txt.t('field.matchName'),
@@ -1508,7 +1509,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      TextField(
+                      ClearableTextField(
                         controller: opponentController,
                         decoration: InputDecoration(
                           labelText: context.txt.t('field.opponentName'),
@@ -1655,7 +1656,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                         },
                       ),
                       const SizedBox(height: 10),
-                      TextField(
+                      ClearableTextField(
                         controller: tagController,
                         decoration: const InputDecoration(
                           labelText: 'Tag',
@@ -1755,7 +1756,7 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              child: TextField(
+                              child: ClearableTextField(
                                 controller: playerNameControllers[playerIndex],
                                 decoration: InputDecoration(
                                   labelText: context.txt.t('game.playerName', params: <String, Object?>{'n': playerIndex + 1}),

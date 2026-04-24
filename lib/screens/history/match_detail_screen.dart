@@ -5,6 +5,7 @@ import '../../l10n/app_strings.dart';
 import '../../models/game_record.dart';
 import '../../models/match.dart';
 import '../../models/sideboard.dart';
+import '../../widgets/clearable_text_field.dart';
 import '../../widgets/text_prompt_dialog.dart';
 import '../../core/ux_state.dart';
 
@@ -35,7 +36,12 @@ class _TwoPlayerMatchDetailScreenState
     final String initialName = widget.match.metadata.name.trim().isEmpty
         ? _defaultMatchName()
         : widget.match.metadata.name.trim();
-    _metadata = widget.match.metadata.copyWith(name: initialName);
+    final DateTime initialMatchDate =
+        widget.match.metadata.matchDate ?? widget.match.createdAt;
+    _metadata = widget.match.metadata.copyWith(
+      name: initialName,
+      matchDate: initialMatchDate,
+    );
     _games = widget.match.games
         .map((GameRecord game) => _applyMetadataToGame(game))
         .toList(growable: false);
@@ -83,6 +89,7 @@ class _TwoPlayerMatchDetailScreenState
       opponentDeckName: _metadata.opponentDeckName.trim(),
       matchFormat: _metadata.format.trim(),
       matchTag: _metadata.tag.trim(),
+      matchDate: _metadata.matchDate?.toIso8601String() ?? '',
     );
   }
 
@@ -206,6 +213,7 @@ class _TwoPlayerMatchDetailScreenState
     if (selectedDeckId.isNotEmpty && _deckById(selectedDeckId) == null) {
       selectedDeckId = '';
     }
+    DateTime selectedMatchDate = _metadata.matchDate ?? DateTime.now();
     String selectedFormat = _metadata.format.trim();
     String selectedOpponentDeckId = _metadata.opponentDeckId.trim();
     if (selectedOpponentDeckId.isEmpty &&
@@ -284,7 +292,7 @@ class _TwoPlayerMatchDetailScreenState
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextField(
+                    ClearableTextField(
                       controller: matchNameController,
                       decoration: InputDecoration(
                         labelText: context.txt.t('field.matchName'),
@@ -293,7 +301,7 @@ class _TwoPlayerMatchDetailScreenState
                       ),
                     ),
                     const SizedBox(height: 10),
-                    TextField(
+                    ClearableTextField(
                       controller: opponentController,
                       decoration: const InputDecoration(
                         labelText: 'Opponent',
@@ -421,12 +429,58 @@ class _TwoPlayerMatchDetailScreenState
                       },
                     ),
                     const SizedBox(height: 10),
-                    TextField(
+                    ClearableTextField(
                       controller: tagController,
                       decoration: const InputDecoration(
                         labelText: 'Tag',
                         border: OutlineInputBorder(),
                         isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    InkWell(
+                      onTap: () async {
+                        final DateTime? pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: selectedMatchDate,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 1),
+                          ),
+                        );
+                        if (pickedDate == null) {
+                          return;
+                        }
+                        final TimeOfDay? pickedTime = await showTimePicker(
+                          context: context, // ignore: use_build_context_synchronously
+                          initialTime: TimeOfDay.fromDateTime(
+                            selectedMatchDate,
+                          ),
+                        );
+                        setDialogState(() {
+                          selectedMatchDate = DateTime(
+                            pickedDate.year,
+                            pickedDate.month,
+                            pickedDate.day,
+                            pickedTime?.hour ?? selectedMatchDate.hour,
+                            pickedTime?.minute ?? selectedMatchDate.minute,
+                          );
+                        });
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: context.txt.t('field.date'),
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                          suffixIcon: const Icon(
+                            Icons.calendar_today_rounded,
+                            size: 18,
+                          ),
+                        ),
+                        child: Text(
+                          formatDateTime(selectedMatchDate, context),
+                          style: const TextStyle(fontSize: 14),
+                        ),
                       ),
                     ),
                   ],
@@ -480,6 +534,7 @@ class _TwoPlayerMatchDetailScreenState
         opponentDeckId: selectedOpponentDeck?.id ?? '',
         opponentDeckName: selectedOpponentDeck?.name ?? '',
         tag: tagController.text.trim(),
+        matchDate: selectedMatchDate,
       ),
     );
     disposeTextControllersLater(<TextEditingController>[
@@ -765,6 +820,11 @@ class _TwoPlayerMatchDetailScreenState
                     ),
                     _buildSummaryRow(label: context.txt.t('field.format'), value: _metadata.format),
                     _buildSummaryRow(label: context.txt.t('field.tag'), value: _metadata.tag),
+                    if (_metadata.matchDate != null)
+                      _buildSummaryRow(
+                        label: context.txt.t('field.date'),
+                        value: formatDateTime(_metadata.matchDate!, context),
+                      ),
                     const SizedBox(height: 10),
                     Text(
                       'Edit match changes metadata only. Match result is calculated from the game results below.',

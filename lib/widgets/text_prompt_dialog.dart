@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/app_strings.dart';
+import 'clearable_text_field.dart';
 
 class TextPromptDialog extends StatefulWidget {
   const TextPromptDialog({
@@ -38,7 +39,7 @@ class _TextPromptDialogState extends State<TextPromptDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(widget.title),
-      content: TextField(
+      content: ClearableTextField(
         controller: _controller,
         autofocus: true,
         maxLines: widget.maxLines,

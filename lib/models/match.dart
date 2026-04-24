@@ -80,6 +80,7 @@ class MatchMetadata {
     required this.opponentDeckName,
     required this.format,
     required this.tag,
+    this.matchDate,
   });
 
   final String name;
@@ -90,6 +91,7 @@ class MatchMetadata {
   final String opponentDeckName;
   final String format;
   final String tag;
+  final DateTime? matchDate;
 
   MatchMetadata copyWith({
     String? name,
@@ -100,6 +102,8 @@ class MatchMetadata {
     String? opponentDeckName,
     String? format,
     String? tag,
+    DateTime? matchDate,
+    bool clearMatchDate = false,
   }) {
     return MatchMetadata(
       name: name ?? this.name,
@@ -110,6 +114,7 @@ class MatchMetadata {
       opponentDeckName: opponentDeckName ?? this.opponentDeckName,
       format: format ?? this.format,
       tag: tag ?? this.tag,
+      matchDate: clearMatchDate ? null : (matchDate ?? this.matchDate),
     );
   }
 }

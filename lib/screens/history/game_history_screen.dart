@@ -394,6 +394,16 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
         games,
         (GameRecord game) => game.matchTag.trim(),
       );
+      DateTime? matchDate;
+      for (int i = games.length - 1; i >= 0; i--) {
+        final String raw = games[i].matchDate.trim();
+        if (raw.isNotEmpty) {
+          matchDate = DateTime.tryParse(raw);
+          if (matchDate != null) {
+            break;
+          }
+        }
+      }
       final MatchMetadata metadata = MatchMetadata(
         name: matchName,
         opponentName: opponent,
@@ -403,14 +413,16 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
         opponentDeckName: opponentDeckName,
         format: matchFormat,
         tag: tag,
+        matchDate: matchDate,
       );
 
+      final DateTime effectiveCreatedAt = matchDate ?? createdAt;
       matches.add(
         MatchRecord(
           id: entry.key,
           tcgKey: widget.tcg.storageKey,
           metadata: metadata,
-          createdAt: createdAt,
+          createdAt: effectiveCreatedAt,
           updatedAt: updatedAt,
           games: games,
           aggregateResult: aggregateMatchResultFromGames(games),
