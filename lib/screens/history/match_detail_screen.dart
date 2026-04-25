@@ -5,7 +5,7 @@ import '../../l10n/app_strings.dart';
 import '../../models/game_record.dart';
 import '../../models/match.dart';
 import '../../models/sideboard.dart';
-import '../../widgets/clearable_text_field.dart';
+import '../../widgets/match_editor_dialog.dart';
 import '../../widgets/text_prompt_dialog.dart';
 import '../../core/ux_state.dart';
 
@@ -93,42 +93,6 @@ class _TwoPlayerMatchDetailScreenState
     );
   }
 
-  Future<String?> _promptText({
-    required String title,
-    required String initialValue,
-    required String hintText,
-    int maxLines = 1,
-  }) async {
-    return showDialog<String>(
-      context: context,
-      builder: (BuildContext context) {
-        return TextPromptDialog(
-          title: title,
-          initialValue: initialValue,
-          hintText: hintText,
-          maxLines: maxLines,
-        );
-      },
-    );
-  }
-
-  SideboardDeck? _deckById(String deckId) {
-    final String trimmedId = deckId.trim();
-    if (trimmedId.isEmpty) {
-      return null;
-    }
-    for (final SideboardDeck deck in widget.decks) {
-      if (deck.id == trimmedId) {
-        return deck;
-      }
-    }
-    return null;
-  }
-
-  SideboardDeck? _deckByName(String deckName) {
-    return findUniqueDeckByName(widget.decks, deckName);
-  }
-
   String _selectedMatchResult(GameRecord record) {
     return normalizedMatchResultOrEmpty(record.matchResult);
   }
@@ -197,441 +161,43 @@ class _TwoPlayerMatchDetailScreenState
     if (!mounted) {
       return;
     }
-    final TextEditingController matchNameController = TextEditingController(
-      text: _effectiveMatchName(),
-    );
-    final TextEditingController opponentController = TextEditingController(
-      text: _metadata.opponentName,
-    );
-    final TextEditingController tagController = TextEditingController(
-      text: _metadata.tag,
-    );
-    String selectedDeckId = _metadata.deckId.trim();
-    if (selectedDeckId.isEmpty && _metadata.deckName.trim().isNotEmpty) {
-      selectedDeckId = _deckByName(_metadata.deckName)?.id ?? '';
-    }
-    if (selectedDeckId.isNotEmpty && _deckById(selectedDeckId) == null) {
-      selectedDeckId = '';
-    }
-    String customDeckName = (selectedDeckId.isEmpty &&
-            _metadata.deckName.trim().isNotEmpty)
-        ? _metadata.deckName.trim()
-        : '';
-    DateTime selectedMatchDate = _metadata.matchDate ?? DateTime.now();
-    String selectedFormat = _metadata.format.trim();
-    String selectedOpponentDeckId = _metadata.opponentDeckId.trim();
-    if (selectedOpponentDeckId.isEmpty &&
-        _metadata.opponentDeckName.trim().isNotEmpty) {
-      selectedOpponentDeckId =
-          _deckByName(_metadata.opponentDeckName)?.id ?? '';
-    }
-    String customOpponentDeckName = (selectedOpponentDeckId.isEmpty &&
-            _metadata.opponentDeckName.trim().isNotEmpty)
-        ? _metadata.opponentDeckName.trim()
-        : '';
 
-    List<String> formatOptions() {
-      final Set<String> formats = <String>{};
-      for (final SideboardDeck deck in widget.decks) {
-        final String format = deck.format.trim();
-        if (format.isNotEmpty) {
-          formats.add(format);
-        }
-      }
-      for (final GameRecord game in _games) {
-        final String format = game.matchFormat.trim();
-        if (format.isNotEmpty) {
-          formats.add(format);
-        }
-      }
-      if (selectedFormat.trim().isNotEmpty) {
-        formats.add(selectedFormat.trim());
-      }
-      final List<String> sorted = formats.toList(growable: false);
-      sorted.sort((String a, String b) {
-        return a.toLowerCase().compareTo(b.toLowerCase());
-      });
-      return sorted;
-    }
-
-    List<SideboardDeck> opponentDeckOptions() {
-      return filterDecksByFormat(widget.decks, selectedFormat);
-    }
-
-    List<SideboardDeck> deckOptions() {
-      return filterDecksByFormat(widget.decks, selectedFormat);
-    }
-
-    void normalizeSelectedDeck() {
-      if (selectedDeckId.isEmpty) {
-        return;
-      }
-      final SideboardDeck? selectedDeck = _deckById(selectedDeckId);
-      if (selectedDeck == null ||
-          !deckMatchesFormat(selectedDeck, selectedFormat)) {
-        selectedDeckId = '';
-      }
-    }
-
-    void normalizeSelectedOpponentDeck() {
-      if (selectedOpponentDeckId.isEmpty) {
-        return;
-      }
-      final SideboardDeck? selectedOpponentDeck = _deckById(
-        selectedOpponentDeckId,
-      );
-      if (selectedOpponentDeck == null ||
-          !deckMatchesFormat(selectedOpponentDeck, selectedFormat)) {
-        selectedOpponentDeckId = '';
-      }
-    }
-
-    normalizeSelectedDeck();
-    normalizeSelectedOpponentDeck();
-
-    final bool? shouldSave = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(context.txt.t('dialog.matchDetails')),
-          content: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setDialogState) {
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ClearableTextField(
-                      controller: matchNameController,
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.matchName'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    ClearableTextField(
-                      controller: opponentController,
-                      decoration: const InputDecoration(
-                        labelText: 'Opponent',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedFormat.isEmpty
-                          ? null
-                          : selectedFormat,
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.format'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: <DropdownMenuItem<String>>[
-                        DropdownMenuItem<String>(
-                          value: '',
-                          child: Text(context.txt.t('field.noFormat')),
-                        ),
-                        ...formatOptions().map((String format) {
-                          return DropdownMenuItem<String>(
-                            value: format,
-                            child: Text(format),
-                          );
-                        }),
-                        DropdownMenuItem<String>(
-                          value: '__add_format__',
-                          child: Text(context.txt.t('field.addNewFormat')),
-                        ),
-                      ],
-                      onChanged: (String? nextValue) async {
-                        if (nextValue == null) {
-                          return;
-                        }
-                        if (nextValue == '__add_format__') {
-                          final String? created = await _promptText(
-                            title: 'New format',
-                            initialValue: '',
-                            hintText: 'Modern, Edison, Commander...',
-                          );
-                          if (created == null) {
-                            return;
-                          }
-                          final String trimmed = created.trim();
-                          if (trimmed.isEmpty) {
-                            return;
-                          }
-                          setDialogState(() {
-                            selectedFormat = trimmed;
-                            normalizeSelectedDeck();
-                            normalizeSelectedOpponentDeck();
-                          });
-                          return;
-                        }
-                        setDialogState(() {
-                          selectedFormat = nextValue.trim();
-                          normalizeSelectedDeck();
-                          normalizeSelectedOpponentDeck();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey<String>(
-                        'deck_${selectedDeckId}_$customDeckName',
-                      ),
-                      initialValue: selectedDeckId.isNotEmpty
-                          ? selectedDeckId
-                          : (customDeckName.isNotEmpty
-                                ? '__custom_deck__'
-                                : null),
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.deck'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: <DropdownMenuItem<String>>[
-                        DropdownMenuItem<String>(
-                          value: '',
-                          child: Text(context.txt.t('field.noDeck')),
-                        ),
-                        ...deckOptions().map((SideboardDeck deck) {
-                          return DropdownMenuItem<String>(
-                            value: deck.id,
-                            child: Text(
-                              deck.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }),
-                        if (customDeckName.isNotEmpty)
-                          DropdownMenuItem<String>(
-                            value: '__custom_deck__',
-                            child: Text(
-                              customDeckName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        DropdownMenuItem<String>(
-                          value: '__add_deck__',
-                          child: Text(context.txt.t('field.addNewDeck')),
-                        ),
-                      ],
-                      onChanged: (String? nextValue) async {
-                        if (nextValue == '__add_deck__') {
-                          final String? created = await _promptText(
-                            title: context.txt.t('field.addNewDeck'),
-                            initialValue: customDeckName,
-                            hintText: context.txt.t('field.deckName'),
-                          );
-                          if (created == null) {
-                            return;
-                          }
-                          final String trimmed = created.trim();
-                          if (trimmed.isEmpty) {
-                            return;
-                          }
-                          setDialogState(() {
-                            selectedDeckId = '';
-                            customDeckName = trimmed;
-                          });
-                          return;
-                        }
-                        if (nextValue == '__custom_deck__') {
-                          return;
-                        }
-                        setDialogState(() {
-                          selectedDeckId = (nextValue ?? '').trim();
-                          customDeckName = '';
-                          normalizeSelectedDeck();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey<String>(
-                        'opp_deck_${selectedOpponentDeckId}_$customOpponentDeckName',
-                      ),
-                      initialValue: selectedOpponentDeckId.isNotEmpty
-                          ? selectedOpponentDeckId
-                          : (customOpponentDeckName.isNotEmpty
-                                ? '__custom_opp_deck__'
-                                : null),
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.opponentDeck'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: <DropdownMenuItem<String>>[
-                        DropdownMenuItem<String>(
-                          value: '',
-                          child: Text(context.txt.t('field.noOpponentDeck')),
-                        ),
-                        ...opponentDeckOptions().map((SideboardDeck deck) {
-                          return DropdownMenuItem<String>(
-                            value: deck.id,
-                            child: Text(
-                              deck.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }),
-                        if (customOpponentDeckName.isNotEmpty)
-                          DropdownMenuItem<String>(
-                            value: '__custom_opp_deck__',
-                            child: Text(
-                              customOpponentDeckName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        DropdownMenuItem<String>(
-                          value: '__add_deck__',
-                          child: Text(context.txt.t('field.addNewDeck')),
-                        ),
-                      ],
-                      onChanged: (String? nextValue) async {
-                        if (nextValue == '__add_deck__') {
-                          final String? created = await _promptText(
-                            title: context.txt.t('field.addNewDeck'),
-                            initialValue: customOpponentDeckName,
-                            hintText: context.txt.t('field.deckName'),
-                          );
-                          if (created == null) {
-                            return;
-                          }
-                          final String trimmed = created.trim();
-                          if (trimmed.isEmpty) {
-                            return;
-                          }
-                          setDialogState(() {
-                            selectedOpponentDeckId = '';
-                            customOpponentDeckName = trimmed;
-                          });
-                          return;
-                        }
-                        if (nextValue == '__custom_opp_deck__') {
-                          return;
-                        }
-                        setDialogState(() {
-                          selectedOpponentDeckId = (nextValue ?? '').trim();
-                          customOpponentDeckName = '';
-                          normalizeSelectedOpponentDeck();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    ClearableTextField(
-                      controller: tagController,
-                      decoration: const InputDecoration(
-                        labelText: 'Tag',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    InkWell(
-                      onTap: () async {
-                        final DateTime? pickedDate = await showDatePicker(
-                          context: context,
-                          initialDate: selectedMatchDate,
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime.now().add(
-                            const Duration(days: 1),
-                          ),
-                        );
-                        if (pickedDate == null) {
-                          return;
-                        }
-                        final TimeOfDay? pickedTime = await showTimePicker(
-                          context: context, // ignore: use_build_context_synchronously
-                          initialTime: TimeOfDay.fromDateTime(
-                            selectedMatchDate,
-                          ),
-                        );
-                        setDialogState(() {
-                          selectedMatchDate = DateTime(
-                            pickedDate.year,
-                            pickedDate.month,
-                            pickedDate.day,
-                            pickedTime?.hour ?? selectedMatchDate.hour,
-                            pickedTime?.minute ?? selectedMatchDate.minute,
-                          );
-                        });
-                      },
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: context.txt.t('field.date'),
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                          suffixIcon: const Icon(
-                            Icons.calendar_today_rounded,
-                            size: 18,
-                          ),
-                        ),
-                        child: Text(
-                          formatDateTime(selectedMatchDate, context),
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(context.txt.t('common.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(context.txt.t('common.save')),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldSave != true) {
-      disposeTextControllersLater(<TextEditingController>[
-        matchNameController,
-        opponentController,
-        tagController,
-      ]);
-      return;
-    }
-
-    if (!mounted) {
-      disposeTextControllersLater(<TextEditingController>[
-        matchNameController,
-        opponentController,
-        tagController,
-      ]);
-      return;
-    }
-
-    final SideboardDeck? selectedDeck = _deckById(selectedDeckId);
-    final SideboardDeck? selectedOpponentDeck = _deckById(
-      selectedOpponentDeckId,
-    );
-    _applyMatchMetadata(
-      _metadata.copyWith(
-        name: matchNameController.text.trim(),
-        opponentName: opponentController.text.trim(),
-        deckId: selectedDeck?.id ?? '',
-        deckName: selectedDeck?.name ?? customDeckName,
-        format: selectedFormat,
-        opponentDeckId: selectedOpponentDeck?.id ?? '',
-        opponentDeckName: selectedOpponentDeck?.name ?? customOpponentDeckName,
-        tag: tagController.text.trim(),
-        matchDate: selectedMatchDate,
+    final MatchEditorResult? result = await showMatchEditorDialog(
+      context,
+      title: context.txt.t('dialog.matchDetails'),
+      input: MatchEditorInput(
+        decks: widget.decks,
+        matchName: _effectiveMatchName(),
+        opponentName: _metadata.opponentName,
+        format: _metadata.format,
+        deckId: _metadata.deckId,
+        deckName: _metadata.deckName,
+        opponentDeckId: _metadata.opponentDeckId,
+        opponentDeckName: _metadata.opponentDeckName,
+        tag: _metadata.tag,
+        matchDate: _metadata.matchDate,
+        showDeck: true,
+        showDate: true,
       ),
     );
-    disposeTextControllersLater(<TextEditingController>[
-      matchNameController,
-      opponentController,
-      tagController,
-    ]);
+
+    if (result == null || !mounted) {
+      return;
+    }
+
+    _applyMatchMetadata(
+      _metadata.copyWith(
+        name: result.matchName,
+        opponentName: result.opponentName,
+        deckId: result.deckId,
+        deckName: result.deckName,
+        format: result.format,
+        opponentDeckId: result.opponentDeckId,
+        opponentDeckName: result.opponentDeckName,
+        tag: result.tag,
+        matchDate: result.matchDate,
+      ),
+    );
   }
 
   Widget _buildSummaryRow({required String label, required String value}) {
@@ -665,109 +231,37 @@ class _TwoPlayerMatchDetailScreenState
   }
 
   Future<void> _editGameDetails(GameRecord record) async {
-    String stage = supportedGameStages.contains(record.gameStage)
-        ? record.gameStage
-        : 'G1';
-    String result = _selectedMatchResult(record);
-
-    final bool? shouldSave = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(context.txt.t('dialog.gameDetails')),
-          content: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setDialogState) {
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: stage,
-                      decoration: const InputDecoration(
-                        labelText: 'Game',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: supportedGameStages
-                          .map((String item) {
-                            return DropdownMenuItem<String>(
-                              value: item,
-                              child: Text(item),
-                            );
-                          })
-                          .toList(growable: false),
-                      onChanged: (String? nextValue) {
-                        if (nextValue == null) {
-                          return;
-                        }
-                        setDialogState(() {
-                          stage = nextValue;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: result.isEmpty ? null : result,
-                      decoration: const InputDecoration(
-                        labelText: 'Result',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: <DropdownMenuItem<String>>[
-                        const DropdownMenuItem<String>(
-                          value: '',
-                          child: Text('No result'),
-                        ),
-                        ...supportedMatchResults.map((String item) {
-                          return DropdownMenuItem<String>(
-                            value: item,
-                            child: Text(item),
-                          );
-                        }),
-                      ],
-                      onChanged: (String? nextValue) {
-                        setDialogState(() {
-                          result = (nextValue ?? '').trim();
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(context.txt.t('common.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(context.txt.t('common.save')),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldSave != true) {
-      return;
-    }
-
-    _updateGame(record.copyWith(gameStage: stage, matchResult: result));
-  }
-
-  Future<void> _editNotes(GameRecord record) async {
-    final String? result = await _promptText(
-      title: 'Edit game notes',
-      initialValue: record.notes,
-      hintText: 'Write some notes...',
-      maxLines: 6,
+    final MatchEditorResult? result = await showMatchEditorDialog(
+      context,
+      title: context.txt.t('dialog.gameDetails'),
+      input: MatchEditorInput(
+        decks: const <SideboardDeck>[],
+        gameStage: record.gameStage,
+        result: _selectedMatchResult(record),
+        showMatchName: false,
+        showOpponent: false,
+        showFormat: false,
+        showOpponentDeck: false,
+        showTag: false,
+        showGameStage: true,
+        showResult: true,
+      ),
     );
     if (result == null) {
       return;
     }
-    _updateGame(record.copyWith(notes: result.trim()));
+    _updateGame(
+      record.copyWith(gameStage: result.gameStage, matchResult: result.result),
+    );
+  }
+
+  Future<void> _editNotes(GameRecord record) async {
+    final GameRecord? updated = await showNotesEditDialog(
+      context,
+      record,
+      title: 'Edit game notes',
+    );
+    if (updated != null) _updateGame(updated);
   }
 
   Future<void> _deleteGame(GameRecord record) async {

@@ -9,9 +9,7 @@ import '../../l10n/app_strings.dart';
 import '../../models/app_settings.dart';
 import '../../models/game_record.dart';
 import '../../models/sideboard.dart';
-import '../../widgets/clearable_text_field.dart';
-import '../../widgets/searchable_combo_field.dart';
-import '../../widgets/text_prompt_dialog.dart';
+import '../../widgets/match_editor_dialog.dart';
 import '../../core/ux_state.dart';
 import '../mtg/mtg_duel_screen.dart';
 
@@ -1348,393 +1346,60 @@ class _DuelScreenState extends State<DuelScreen> {
     if (!mounted) {
       return;
     }
-    final TextEditingController matchNameController = TextEditingController(
-      text: _matchName,
-    );
-    final TextEditingController opponentController = TextEditingController(
-      text: _opponentName,
-    );
-    final TextEditingController tagController = TextEditingController(
-      text: _matchTag,
-    );
-    String stage = _selectedGameStage;
-    String selectedDeckId = _selectedDeckIdForHistory();
-    if (selectedDeckId.isEmpty && _deckInUse.trim().isNotEmpty) {
-      selectedDeckId = _deckByName(_deckInUse)?.id ?? '';
-    }
-    if (selectedDeckId.isNotEmpty && _deckById(selectedDeckId) == null) {
-      selectedDeckId = '';
-    }
-    String selectedFormat = _matchFormat.trim();
-    String selectedOpponentDeckId = _selectedOpponentDeckIdForHistory();
 
-    Future<String?> promptText({
-      required String title,
-      required String initialValue,
-      required String hintText,
-    }) async {
-      return showDialog<String>(
-        context: context,
-        builder: (BuildContext context) {
-          return TextPromptDialog(
-            title: title,
-            initialValue: initialValue,
-            hintText: hintText,
-            maxLines: 1,
-          );
-        },
-      );
-    }
-
-    List<String> formatOptions() {
-      final Set<String> unique = <String>{};
-      for (final SideboardDeck deck in _sessionAvailableDecks) {
-        final String format = deck.format.trim();
-        if (format.isNotEmpty) {
-          unique.add(format);
-        }
-      }
-      if (selectedFormat.trim().isNotEmpty) {
-        unique.add(selectedFormat.trim());
-      }
-      final List<String> sorted = unique.toList(growable: false);
-      sorted.sort((String a, String b) {
-        return a.toLowerCase().compareTo(b.toLowerCase());
-      });
-      return sorted;
-    }
-
-    List<SideboardDeck> deckOptions() {
-      return filterDecksByFormat(_sessionAvailableDecks, selectedFormat);
-    }
-
-    List<SideboardDeck> opponentDeckOptions() {
-      return filterDecksByFormat(_sessionAvailableDecks, selectedFormat);
-    }
-
-    void normalizeSelectedDeck() {
-      if (selectedDeckId.isEmpty) {
-        return;
-      }
-      final SideboardDeck? selectedDeck = _deckById(selectedDeckId);
-      if (selectedDeck == null ||
-          !deckMatchesFormat(selectedDeck, selectedFormat)) {
-        selectedDeckId = '';
-      }
-    }
-
-    void normalizeSelectedOpponentDeck() {
-      if (selectedOpponentDeckId.isEmpty) {
-        return;
-      }
-      final SideboardDeck? selectedOpponentDeck = _deckById(
-        selectedOpponentDeckId,
-      );
-      if (selectedOpponentDeck == null) {
-        selectedOpponentDeckId = '';
-        return;
-      }
-      if (!deckMatchesFormat(selectedOpponentDeck, selectedFormat)) {
-        selectedOpponentDeckId = '';
-      }
-    }
-
-    if (selectedOpponentDeckId.isEmpty &&
-        _opponentDeckInUse.trim().isNotEmpty) {
-      selectedOpponentDeckId = _deckByName(_opponentDeckInUse)?.id ?? '';
-    }
-    normalizeSelectedDeck();
-    normalizeSelectedOpponentDeck();
-
-    final bool? shouldSave = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(context.txt.t('dialog.matchDetails')),
-          content: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setDialogState) {
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ClearableTextField(
-                      controller: matchNameController,
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.matchName'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    ClearableTextField(
-                      controller: opponentController,
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.opponentName'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SearchableComboField(
-                      value: selectedFormat,
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.format'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      fixedItems: <ComboItem>[
-                        ComboItem(
-                          value: '',
-                          label: context.txt.t('field.noFormat'),
-                        ),
-                      ],
-                      items: formatOptions()
-                          .map((String f) => ComboItem(value: f, label: f))
-                          .toList(growable: false),
-                      addLabel: context.txt.t('field.addNewFormat'),
-                      onAdd: (String query) async {
-                        final String? created = await promptText(
-                          title: 'New format',
-                          initialValue: query,
-                          hintText: 'Modern, Edison, Commander...',
-                        );
-                        if (created == null) return null;
-                        final String trimmed = created.trim();
-                        return trimmed.isEmpty ? null : trimmed;
-                      },
-                      onChanged: (String value) {
-                        setDialogState(() {
-                          selectedFormat = value.trim();
-                          normalizeSelectedDeck();
-                          normalizeSelectedOpponentDeck();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    SearchableComboField(
-                      value: selectedOpponentDeckId,
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.opponentDeck'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      fixedItems: <ComboItem>[
-                        ComboItem(
-                          value: '',
-                          label: context.txt.t('field.noOpponentDeck'),
-                        ),
-                      ],
-                      items: opponentDeckOptions()
-                          .map(
-                            (SideboardDeck d) =>
-                                ComboItem(value: d.id, label: d.name),
-                          )
-                          .toList(growable: false),
-                      addLabel: context.txt.t('field.addNewDeck'),
-                      onAdd: (String query) async {
-                        final String? createdName = await promptText(
-                          title: 'New opponent deck',
-                          initialValue: query,
-                          hintText: 'Deck name',
-                        );
-                        if (createdName == null) return null;
-                        final String trimmedName = createdName.trim();
-                        if (trimmedName.isEmpty) return null;
-                        final SideboardDeck? existing = _deckByName(
-                          trimmedName,
-                        );
-                        if (existing != null) return existing.id;
-                        final SideboardDeck newDeck = SideboardDeck(
-                          id: DateTime.now().microsecondsSinceEpoch.toString(),
-                          name: trimmedName,
-                          createdAt: DateTime.now(),
-                          isFavorite: false,
-                          userNotes: '',
-                          matchups: const <SideboardMatchup>[],
-                          format: selectedFormat.trim(),
-                          tag: '',
-                          tcgKey: _isMtgRules
-                              ? SupportedTcg.mtg.storageKey
-                              : SupportedTcg.yugioh.storageKey,
-                        );
-                        setDialogState(() {
-                          _sessionAvailableDecks = <SideboardDeck>[
-                            newDeck,
-                            ..._sessionAvailableDecks,
-                          ];
-                          _createdDecksForSession.add(newDeck);
-                        });
-                        return newDeck.id;
-                      },
-                      onChanged: (String value) {
-                        setDialogState(() {
-                          selectedOpponentDeckId = value.trim();
-                          normalizeSelectedOpponentDeck();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    ClearableTextField(
-                      controller: tagController,
-                      decoration: const InputDecoration(
-                        labelText: 'Tag',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SearchableComboField(
-                      value: stage,
-                      decoration: const InputDecoration(
-                        labelText: 'Game',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: supportedGameStages
-                          .map((String s) => ComboItem(value: s, label: s))
-                          .toList(growable: false),
-                      onChanged: (String value) {
-                        setDialogState(() {
-                          stage = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    SearchableComboField(
-                      value: selectedDeckId,
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.deckInUse'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      fixedItems: <ComboItem>[
-                        ComboItem(
-                          value: '',
-                          label: context.txt.t('field.noDeck'),
-                        ),
-                      ],
-                      items: deckOptions()
-                          .map(
-                            (SideboardDeck d) =>
-                                ComboItem(value: d.id, label: d.name),
-                          )
-                          .toList(growable: false),
-                      addLabel: context.txt.t('field.addNewDeck'),
-                      onAdd: (String query) async {
-                        final String? createdName = await promptText(
-                          title: context.txt.t('field.addNewDeck'),
-                          initialValue: query,
-                          hintText: context.txt.t('field.deckName'),
-                        );
-                        if (createdName == null) return null;
-                        final String trimmedName = createdName.trim();
-                        if (trimmedName.isEmpty) return null;
-                        final SideboardDeck? existing = _deckByName(trimmedName);
-                        if (existing != null) return existing.id;
-                        final SideboardDeck newDeck = SideboardDeck(
-                          id: DateTime.now().microsecondsSinceEpoch.toString(),
-                          name: trimmedName,
-                          createdAt: DateTime.now(),
-                          isFavorite: false,
-                          userNotes: '',
-                          matchups: const <SideboardMatchup>[],
-                          format: selectedFormat.trim(),
-                          tag: '',
-                          tcgKey: _isMtgRules
-                              ? SupportedTcg.mtg.storageKey
-                              : SupportedTcg.yugioh.storageKey,
-                        );
-                        setDialogState(() {
-                          _sessionAvailableDecks = <SideboardDeck>[
-                            newDeck,
-                            ..._sessionAvailableDecks,
-                          ];
-                          _createdDecksForSession.add(newDeck);
-                        });
-                        return newDeck.id;
-                      },
-                      onChanged: (String value) {
-                        setDialogState(() {
-                          selectedDeckId = value.trim();
-                          if (selectedDeckId.isEmpty) return;
-                          final SideboardDeck? linkedDeck = _deckById(
-                            selectedDeckId,
-                          );
-                          if (linkedDeck != null &&
-                              selectedFormat.trim().isEmpty &&
-                              linkedDeck.format.trim().isNotEmpty) {
-                            selectedFormat = linkedDeck.format.trim();
-                          }
-                          normalizeSelectedDeck();
-                          normalizeSelectedOpponentDeck();
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(context.txt.t('common.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(context.txt.t('common.save')),
-            ),
-          ],
-        );
-      },
+    final MatchEditorResult? result = await showMatchEditorDialog(
+      context,
+      title: context.txt.t('dialog.matchDetails'),
+      input: MatchEditorInput(
+        decks: _sessionAvailableDecks,
+        tcgKey: _isMtgRules
+            ? SupportedTcg.mtg.storageKey
+            : SupportedTcg.yugioh.storageKey,
+        matchName: _matchName,
+        opponentName: _opponentName,
+        format: _matchFormat,
+        deckId: _selectedDeckIdForHistory(),
+        deckName: _deckInUse,
+        opponentDeckId: _selectedOpponentDeckIdForHistory(),
+        opponentDeckName: _opponentDeckInUse,
+        tag: _matchTag,
+        gameStage: _selectedGameStage,
+        showDeckInUse: true,
+        showGameStage: true,
+        allowCreateDeck: true,
+      ),
     );
 
-    if (shouldSave != true) {
-      disposeTextControllersLater(<TextEditingController>[
-        matchNameController,
-        opponentController,
-        tagController,
-      ]);
-      return;
-    }
-
-    if (!mounted) {
-      disposeTextControllersLater(<TextEditingController>[
-        matchNameController,
-        opponentController,
-        tagController,
-      ]);
+    if (result == null || !mounted) {
       return;
     }
 
     setState(() {
-      _matchName = matchNameController.text.trim();
-      _opponentName = opponentController.text.trim();
-      final SideboardDeck? selectedDeckObject = _deckById(selectedDeckId);
-      final SideboardDeck? selectedOpponentDeck = _deckById(
-        selectedOpponentDeckId,
-      );
-      _selectedOpponentDeckId = selectedOpponentDeck?.id ?? '';
-      _opponentDeckInUse = selectedOpponentDeck?.name ?? '';
-      _matchFormat = selectedFormat.trim();
-      _matchTag = tagController.text.trim();
+      _matchName = result.matchName;
+      _opponentName = result.opponentName;
+      _matchFormat = result.format;
+      _matchTag = result.tag;
+      _selectedOpponentDeckId = result.opponentDeckId;
+      _opponentDeckInUse = result.opponentDeckName;
+      _selectedDeckId = result.deckId;
+      _deckInUse = result.deckName;
+      _selectedGameStage = result.gameStage;
       if (_opponentName.isNotEmpty) {
         _lastCompletedOpponentName = _opponentName;
         _lastRecordedOpponentName = _opponentName;
       }
-      _selectedDeckId = selectedDeckObject?.id ?? '';
-      _deckInUse = selectedDeckObject?.name ?? '';
-      _selectedGameStage = stage;
-      if (stage == 'G1') {
+      if (result.gameStage == 'G1') {
         _bo3Wins = 0;
         _bo3Losses = 0;
       }
+      for (final SideboardDeck newDeck in result.createdDecks) {
+        _sessionAvailableDecks = <SideboardDeck>[
+          newDeck,
+          ..._sessionAvailableDecks,
+        ];
+        _createdDecksForSession.add(newDeck);
+      }
     });
-    disposeTextControllersLater(<TextEditingController>[
-      matchNameController,
-      opponentController,
-      tagController,
-    ]);
   }
 
   Future<void> _confirmReset({bool fromHome = false}) async {

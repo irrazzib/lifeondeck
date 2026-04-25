@@ -8,6 +8,7 @@ import '../../models/game_record.dart';
 import '../../models/match.dart';
 import '../../models/sideboard.dart';
 import '../../widgets/searchable_combo_field.dart';
+import '../../widgets/match_editor_dialog.dart';
 import '../../widgets/text_prompt_dialog.dart';
 import 'match_detail_screen.dart';
 import 'dart:async';
@@ -486,25 +487,6 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     });
   }
 
-  Future<String?> _promptText({
-    required String title,
-    required String initialValue,
-    required String hintText,
-    int maxLines = 1,
-  }) async {
-    return showDialog<String>(
-      context: context,
-      builder: (BuildContext context) {
-        return TextPromptDialog(
-          title: title,
-          initialValue: initialValue,
-          hintText: hintText,
-          maxLines: maxLines,
-        );
-      },
-    );
-  }
-
   void _updateRecord(GameRecord updatedRecord) {
     final int index = _records.indexWhere(
       (GameRecord record) => record.id == updatedRecord.id,
@@ -598,169 +580,40 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   }
 
   Future<void> _editMatchDetails(GameRecord record) async {
-    final TextEditingController opponentController = TextEditingController(
-      text: record.opponentName,
-    );
-    String selectedDeckId = _resolvedDeckId(record);
-    String customDeckName = (selectedDeckId.isEmpty &&
-            _resolvedDeckName(record).trim().isNotEmpty)
-        ? _resolvedDeckName(record).trim()
-        : '';
-    String stage = supportedGameStages.contains(record.gameStage)
-        ? record.gameStage
-        : 'G1';
-    String result = _selectedMatchResult(record);
-
-    final bool? shouldSave = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(context.txt.t('dialog.matchDetails')),
-          content: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setDialogState) {
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: opponentController,
-                      decoration: const InputDecoration(
-                        labelText: 'Opponent',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SearchableComboField(
-                      value: selectedDeckId.isNotEmpty
-                          ? selectedDeckId
-                          : (customDeckName.isNotEmpty
-                                ? '__custom_deck__'
-                                : ''),
-                      decoration: const InputDecoration(
-                        labelText: 'Deck',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      fixedItems: <ComboItem>[
-                        ComboItem(
-                          value: '',
-                          label: context.txt.t('field.noDeck'),
-                        ),
-                      ],
-                      items: <ComboItem>[
-                        ...widget.decks.map(
-                          (SideboardDeck d) =>
-                              ComboItem(value: d.id, label: d.name),
-                        ),
-                        if (customDeckName.isNotEmpty)
-                          ComboItem(
-                            value: '__custom_deck__',
-                            label: customDeckName,
-                          ),
-                      ],
-                      addLabel: context.txt.t('field.addNewDeck'),
-                      onAdd: (String query) async {
-                        final String? created = await _promptText(
-                          title: context.txt.t('field.addNewDeck'),
-                          initialValue: customDeckName.isNotEmpty
-                              ? customDeckName
-                              : query,
-                          hintText: context.txt.t('field.deckName'),
-                        );
-                        if (created == null) return null;
-                        final String trimmed = created.trim();
-                        if (trimmed.isEmpty) return null;
-                        setDialogState(() {
-                          selectedDeckId = '';
-                          customDeckName = trimmed;
-                        });
-                        return '__custom_deck__';
-                      },
-                      onChanged: (String nextValue) {
-                        if (nextValue == '__custom_deck__') return;
-                        setDialogState(() {
-                          selectedDeckId = nextValue.trim();
-                          customDeckName = '';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    SearchableComboField(
-                      value: stage,
-                      decoration: const InputDecoration(
-                        labelText: 'Game',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: supportedGameStages
-                          .map((String s) => ComboItem(value: s, label: s))
-                          .toList(growable: false),
-                      onChanged: (String nextValue) {
-                        setDialogState(() {
-                          stage = nextValue;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    SearchableComboField(
-                      value: result,
-                      decoration: const InputDecoration(
-                        labelText: 'Result',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      fixedItems: const <ComboItem>[
-                        ComboItem(value: '', label: 'No result'),
-                      ],
-                      items: supportedMatchResults
-                          .map((String s) => ComboItem(value: s, label: s))
-                          .toList(growable: false),
-                      onChanged: (String nextValue) {
-                        setDialogState(() {
-                          result = nextValue.trim();
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(context.txt.t('common.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(context.txt.t('common.save')),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldSave != true) {
-      disposeTextControllersLater(<TextEditingController>[opponentController]);
-      return;
-    }
-
-    final SideboardDeck? selectedDeck = _deckById(selectedDeckId);
-
-    _updateRecord(
-      record.copyWith(
-        opponentName: opponentController.text.trim(),
-        playerTwoName: opponentController.text.trim().isEmpty
-            ? record.playerTwoName
-            : opponentController.text.trim(),
-        deckId: selectedDeck?.id ?? '',
-        deckName: selectedDeck?.name ?? customDeckName,
-        gameStage: stage,
-        matchResult: result,
+    final MatchEditorResult? result = await showMatchEditorDialog(
+      context,
+      title: context.txt.t('dialog.matchDetails'),
+      input: MatchEditorInput(
+        decks: widget.decks,
+        opponentName: record.opponentName,
+        deckId: _resolvedDeckId(record),
+        deckName: _resolvedDeckName(record),
+        gameStage: record.gameStage,
+        result: _selectedMatchResult(record),
+        showMatchName: false,
+        showFormat: false,
+        showOpponentDeck: false,
+        showTag: false,
+        showDeck: true,
+        showGameStage: true,
+        showResult: true,
       ),
     );
-    disposeTextControllersLater(<TextEditingController>[opponentController]);
+    if (result == null) {
+      return;
+    }
+    _updateRecord(
+      record.copyWith(
+        opponentName: result.opponentName,
+        playerTwoName: result.opponentName.isEmpty
+            ? record.playerTwoName
+            : result.opponentName,
+        deckId: result.deckId,
+        deckName: result.deckName,
+        gameStage: result.gameStage,
+        matchResult: result.result,
+      ),
+    );
   }
 
   String _buildHistoryExportText() {
@@ -979,7 +832,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   }
 
   Future<void> _renameRecord(GameRecord record) async {
-    final String? result = await _promptText(
+    final String? result = await showTextPromptDialog(
+      context,
       title: 'Rename game',
       initialValue: record.title,
       hintText: 'Game name',
@@ -996,16 +850,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   }
 
   Future<void> _editNotes(GameRecord record) async {
-    final String? result = await _promptText(
-      title: 'Edit notes',
-      initialValue: record.notes,
-      hintText: 'Write some notes...',
-      maxLines: 6,
-    );
-    if (result == null) {
-      return;
-    }
-    _updateRecord(record.copyWith(notes: result.trim()));
+    final GameRecord? updated = await showNotesEditDialog(context, record);
+    if (updated != null) _updateRecord(updated);
   }
 
   Future<void> _deleteRecord(GameRecord record) async {
@@ -1047,316 +893,107 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     final String defaultMatchName = _defaultMatchName(
       twoPlayerMatchIds.length + 1,
     );
-
-    final TextEditingController matchNameController = TextEditingController(
-      text: defaultMatchName,
-    );
-    final TextEditingController opponentController = TextEditingController();
-    DateTime selectedDate = now;
-    String selectedDeckId = '';
-    String customDeckName = '';
-    String selectedOpponentDeckId = '';
-    String customOpponentDeckName = '';
-    final List<String> gameResults = <String>['', '', ''];
     const List<String> gameStageLabels = <String>['G1', 'G2', 'G3'];
+    final List<String> gameResults = <String>['', '', ''];
 
-    final bool? shouldCreate = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setDialogState) {
-            final bool canSave = gameResults.any(
-              (String r) => r.isNotEmpty,
-            );
-            return AlertDialog(
-              title: Text(context.txt.t('history.addMatch')),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    TextField(
-                      controller: matchNameController,
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.matchName'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
+    final MatchEditorResult? result = await showMatchEditorDialog(
+      context,
+      title: context.txt.t('history.addMatch'),
+      input: MatchEditorInput(
+        decks: widget.decks,
+        matchName: defaultMatchName,
+        showMatchName: true,
+        showOpponent: true,
+        showFormat: false,
+        showDeck: true,
+        showOpponentDeck: true,
+        showTag: false,
+        showDate: true,
+        showGameStage: false,
+        showResult: false,
+      ),
+      extraContentBuilder: (StateSetter setDialogState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const SizedBox(height: 14),
+            Text(
+              'Games',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (int i = 0; i < 3; i++) ...<Widget>[
+              Row(
+                children: <Widget>[
+                  SizedBox(
+                    width: 28,
+                    child: Text(
+                      gameStageLabels[i],
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    const SizedBox(height: 10),
-                    InkWell(
-                      onTap: () async {
-                        final DateTime? pickedDate = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate,
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime.now().add(
-                            const Duration(days: 1),
-                          ),
-                        );
-                        if (pickedDate == null) {
-                          return;
-                        }
-                        final TimeOfDay? pickedTime = await showTimePicker(
-                          context: context, // ignore: use_build_context_synchronously
-                          initialTime: TimeOfDay.fromDateTime(selectedDate),
-                        );
-                        setDialogState(() {
-                          selectedDate = DateTime(
-                            pickedDate.year,
-                            pickedDate.month,
-                            pickedDate.day,
-                            pickedTime?.hour ?? selectedDate.hour,
-                            pickedTime?.minute ?? selectedDate.minute,
-                          );
-                        });
-                      },
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: context.txt.t('field.date'),
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                          suffixIcon: const Icon(
-                            Icons.calendar_today_rounded,
-                            size: 18,
-                          ),
-                        ),
-                        child: Text(
-                          formatDateTime(selectedDate, context),
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: opponentController,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SearchableComboField(
+                      value: gameResults[i],
                       decoration: const InputDecoration(
-                        labelText: 'Opponent',
+                        labelText: 'Result',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    SearchableComboField(
-                      value: selectedDeckId.isNotEmpty
-                          ? selectedDeckId
-                          : (customDeckName.isNotEmpty
-                                ? '__custom_deck__'
-                                : ''),
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.deck'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      fixedItems: <ComboItem>[
-                        ComboItem(
-                          value: '',
-                          label: context.txt.t('field.noDeck'),
-                        ),
+                      fixedItems: const <ComboItem>[
+                        ComboItem(value: '', label: 'No result'),
                       ],
-                      items: <ComboItem>[
-                        ...widget.decks.map(
-                          (SideboardDeck d) =>
-                              ComboItem(value: d.id, label: d.name),
-                        ),
-                        if (customDeckName.isNotEmpty)
-                          ComboItem(
-                            value: '__custom_deck__',
-                            label: customDeckName,
-                          ),
-                      ],
-                      addLabel: context.txt.t('field.addNewDeck'),
-                      onAdd: (String query) async {
-                        final String? created = await _promptText(
-                          title: context.txt.t('field.addNewDeck'),
-                          initialValue: customDeckName.isNotEmpty
-                              ? customDeckName
-                              : query,
-                          hintText: context.txt.t('field.deckName'),
-                        );
-                        if (created == null) return null;
-                        final String trimmed = created.trim();
-                        if (trimmed.isEmpty) return null;
-                        setDialogState(() {
-                          selectedDeckId = '';
-                          customDeckName = trimmed;
-                        });
-                        return '__custom_deck__';
-                      },
+                      items: supportedMatchResults
+                          .map((String s) => ComboItem(value: s, label: s))
+                          .toList(growable: false),
                       onChanged: (String nextValue) {
-                        if (nextValue == '__custom_deck__') return;
                         setDialogState(() {
-                          selectedDeckId = nextValue.trim();
-                          customDeckName = '';
+                          gameResults[i] = nextValue.trim();
                         });
                       },
                     ),
-                    const SizedBox(height: 10),
-                    SearchableComboField(
-                      value: selectedOpponentDeckId.isNotEmpty
-                          ? selectedOpponentDeckId
-                          : (customOpponentDeckName.isNotEmpty
-                                ? '__custom_opp_deck__'
-                                : ''),
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.opponentDeck'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      fixedItems: <ComboItem>[
-                        ComboItem(
-                          value: '',
-                          label: context.txt.t('field.noDeck'),
-                        ),
-                      ],
-                      items: <ComboItem>[
-                        ...widget.decks.map(
-                          (SideboardDeck d) =>
-                              ComboItem(value: d.id, label: d.name),
-                        ),
-                        if (customOpponentDeckName.isNotEmpty)
-                          ComboItem(
-                            value: '__custom_opp_deck__',
-                            label: customOpponentDeckName,
-                          ),
-                      ],
-                      addLabel: context.txt.t('field.addNewDeck'),
-                      onAdd: (String query) async {
-                        final String? created = await _promptText(
-                          title: context.txt.t('field.addNewDeck'),
-                          initialValue: customOpponentDeckName.isNotEmpty
-                              ? customOpponentDeckName
-                              : query,
-                          hintText: context.txt.t('field.deckName'),
-                        );
-                        if (created == null) return null;
-                        final String trimmed = created.trim();
-                        if (trimmed.isEmpty) return null;
-                        setDialogState(() {
-                          selectedOpponentDeckId = '';
-                          customOpponentDeckName = trimmed;
-                        });
-                        return '__custom_opp_deck__';
-                      },
-                      onChanged: (String nextValue) {
-                        if (nextValue == '__custom_opp_deck__') return;
-                        setDialogState(() {
-                          selectedOpponentDeckId = nextValue.trim();
-                          customOpponentDeckName = '';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Games',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    for (int i = 0; i < 3; i++) ...<Widget>[
-                      Row(
-                        children: <Widget>[
-                          SizedBox(
-                            width: 28,
-                            child: Text(
-                              gameStageLabels[i],
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: SearchableComboField(
-                              value: gameResults[i],
-                              decoration: const InputDecoration(
-                                labelText: 'Result',
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                              ),
-                              fixedItems: const <ComboItem>[
-                                ComboItem(value: '', label: 'No result'),
-                              ],
-                              items: supportedMatchResults
-                                  .map(
-                                    (String s) =>
-                                        ComboItem(value: s, label: s),
-                                  )
-                                  .toList(growable: false),
-                              onChanged: (String nextValue) {
-                                setDialogState(() {
-                                  gameResults[i] = nextValue.trim();
-                                });
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (i < 2) const SizedBox(height: 8),
-                    ],
-                    if (!canSave) ...<Widget>[
-                      const SizedBox(height: 8),
-                      Text(
-                        'At least one game result is required.',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.red.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                  ),
+                ],
               ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text(context.txt.t('common.cancel')),
-                ),
-                FilledButton(
-                  onPressed: canSave
-                      ? () => Navigator.of(context).pop(true)
-                      : null,
-                  child: Text(context.txt.t('common.save')),
-                ),
-              ],
-            );
-          },
+              if (i < 2) const SizedBox(height: 8),
+            ],
+          ],
         );
       },
     );
 
-    final String matchNameText = matchNameController.text.trim();
-    final String opponentText = opponentController.text.trim();
-    disposeTextControllersLater(<TextEditingController>[
-      matchNameController,
-      opponentController,
-    ]);
-
-    if (shouldCreate != true || !mounted) {
+    if (result == null || !mounted) {
       return;
     }
 
-    final SideboardDeck? selectedDeck = _deckById(selectedDeckId);
-    final SideboardDeck? selectedOpponentDeck = _deckById(
-      selectedOpponentDeckId,
-    );
-    final String effectiveMatchName = matchNameText.isNotEmpty
-        ? matchNameText
+    final bool anyResult = gameResults.any((String r) => r.isNotEmpty);
+    if (!anyResult) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('At least one game result is required.'),
+        ),
+      );
+      return;
+    }
+
+    final DateTime selectedDate = result.matchDate ?? now;
+    final String effectiveMatchName = result.matchName.isNotEmpty
+        ? result.matchName
         : defaultMatchName;
-    final String dateIso = selectedDate.toIso8601String();
+    final String opponentText = result.opponentName;
     final String gamePrefix = widget.tcg == SupportedTcg.mtg
         ? 'MTG Game'
         : 'Game';
 
     final List<GameRecord> newRecords = <GameRecord>[];
     for (int i = 0; i < 3; i++) {
-      final String result = gameResults[i];
-      if (result.isEmpty) {
+      final String gameResult = gameResults[i];
+      if (gameResult.isEmpty) {
         continue;
       }
       newRecords.add(
@@ -1368,19 +1005,19 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
           notes: '',
           lifePointHistory: const <String>[],
           tcgKey: widget.tcg.storageKey,
-          deckId: selectedDeck?.id ?? '',
-          deckName: selectedDeck?.name ?? customDeckName,
+          deckId: result.deckId,
+          deckName: result.deckName,
           playerOneName: 'Player 1',
           playerTwoName: opponentText.isNotEmpty ? opponentText : 'Player 2',
           playerCount: 2,
           matchId: matchId,
           matchName: effectiveMatchName,
           opponentName: opponentText,
-          opponentDeckId: selectedOpponentDeck?.id ?? '',
-          opponentDeckName: selectedOpponentDeck?.name ?? customOpponentDeckName,
+          opponentDeckId: result.opponentDeckId,
+          opponentDeckName: result.opponentDeckName,
           matchTag: '',
-          matchResult: result,
-          matchDate: dateIso,
+          matchResult: gameResult,
+          matchDate: selectedDate.toIso8601String(),
         ),
       );
     }

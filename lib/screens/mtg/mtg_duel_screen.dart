@@ -10,8 +10,7 @@ import '../../models/app_settings.dart';
 import '../../models/game_record.dart';
 import '../../models/sideboard.dart';
 import '../../widgets/clearable_text_field.dart';
-import '../../widgets/searchable_combo_field.dart';
-import '../../widgets/text_prompt_dialog.dart';
+import '../../widgets/match_editor_dialog.dart';
 import 'mtg_duel_setup_screen.dart';
 import '../../core/ux_state.dart';
 
@@ -1369,15 +1368,8 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
         return;
       }
     }
-    final TextEditingController matchNameController = TextEditingController(
-      text: _matchName,
-    );
-    final TextEditingController opponentController = TextEditingController(
-      text: _opponentName,
-    );
-    final TextEditingController tagController = TextEditingController(
-      text: _matchTag,
-    );
+
+    // Player name controllers and colors owned here so they survive the dialog.
     final List<TextEditingController> playerNameControllers =
         List<TextEditingController>.generate(
           widget.playerCount,
@@ -1386,499 +1378,191 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
     final List<Color> selectedPlayerCardColors = List<Color>.from(
       _playerCardBackgroundColors,
     );
-    String stage = _selectedGameStage;
-    String selectedDeckId = _selectedDeckIdForHistory();
-    if (selectedDeckId.isEmpty && _deckInUse.trim().isNotEmpty) {
-      selectedDeckId = _deckByName(_deckInUse)?.id ?? '';
-    }
-    if (selectedDeckId.isNotEmpty && _deckById(selectedDeckId) == null) {
-      selectedDeckId = '';
-    }
-    String selectedFormat = _matchFormat.trim();
-    String selectedOpponentDeckId = _selectedOpponentDeckIdForHistory();
 
-    Future<String?> promptText({
-      required String title,
-      required String initialValue,
-      required String hintText,
-    }) async {
-      return showDialog<String>(
-        context: context,
-        builder: (BuildContext context) {
-          return TextPromptDialog(
-            title: title,
-            initialValue: initialValue,
-            hintText: hintText,
-            maxLines: 1,
-          );
-        },
-      );
-    }
-
-    List<SideboardDeck> deckOptions() {
-      return filterDecksByFormat(_sessionAvailableDecks, selectedFormat);
-    }
-
-    List<String> formatOptions() {
-      final Set<String> unique = <String>{};
-      for (final SideboardDeck deck in _sessionAvailableDecks) {
-        final String format = deck.format.trim();
-        if (format.isEmpty) {
-          continue;
-        }
-        unique.add(format);
-      }
-      if (selectedFormat.isNotEmpty) {
-        unique.add(selectedFormat);
-      }
-      final List<String> options = unique.toList(growable: false);
-      options.sort((String a, String b) {
-        return a.toLowerCase().compareTo(b.toLowerCase());
-      });
-      return options;
-    }
-
-    List<SideboardDeck> opponentDeckOptions() {
-      return filterDecksByFormat(_sessionAvailableDecks, selectedFormat);
-    }
-
-    void normalizeSelectedDeck() {
-      if (selectedDeckId.isEmpty) {
-        return;
-      }
-      final SideboardDeck? selectedDeck = _deckById(selectedDeckId);
-      if (selectedDeck == null ||
-          !deckMatchesFormat(selectedDeck, selectedFormat)) {
-        selectedDeckId = '';
-      }
-    }
-
-    void normalizeSelectedOpponentDeck() {
-      if (selectedOpponentDeckId.isEmpty) {
-        return;
-      }
-      final SideboardDeck? selectedOpponentDeck = _deckById(
-        selectedOpponentDeckId,
-      );
-      if (selectedOpponentDeck == null) {
-        selectedOpponentDeckId = '';
-        return;
-      }
-      if (!deckMatchesFormat(selectedOpponentDeck, selectedFormat)) {
-        selectedOpponentDeckId = '';
-      }
-    }
-
-    if (selectedOpponentDeckId.isEmpty &&
-        _opponentDeckInUse.trim().isNotEmpty) {
-      selectedOpponentDeckId = _deckByName(_opponentDeckInUse)?.id ?? '';
-    }
-    normalizeSelectedDeck();
-    normalizeSelectedOpponentDeck();
-
-    final bool? shouldSave = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(context.txt.t(_isMultiplayer ? 'dialog.gameDetails' : 'dialog.matchDetails')),
-          content: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setDialogState) {
-              Future<void> pickPlayerColor(int playerIndex) async {
-                final Color? picked = await _promptPlayerCardColor(
-                  title: 'Player ${playerIndex + 1} card color',
-                  selectedColor: selectedPlayerCardColors[playerIndex],
-                );
-                if (picked == null || !mounted) {
-                  return;
-                }
-                setDialogState(() {
-                  selectedPlayerCardColors[playerIndex] = picked;
-                });
-              }
-
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!_isMultiplayer) ...[
-                      ClearableTextField(
-                        controller: matchNameController,
-                        decoration: InputDecoration(
-                          labelText: context.txt.t('field.matchName'),
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      ClearableTextField(
-                        controller: opponentController,
-                        decoration: InputDecoration(
-                          labelText: context.txt.t('field.opponentName'),
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SearchableComboField(
-                        value: selectedFormat,
-                        decoration: InputDecoration(
-                          labelText: context.txt.t('field.format'),
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        fixedItems: <ComboItem>[
-                          ComboItem(
-                            value: '',
-                            label: context.txt.t('field.noFormat'),
-                          ),
-                        ],
-                        items: formatOptions()
-                            .map((String f) => ComboItem(value: f, label: f))
-                            .toList(growable: false),
-                        addLabel: context.txt.t('field.addNewFormat'),
-                        onAdd: (String query) async {
-                          final String? created = await promptText(
-                            title: 'New format',
-                            initialValue: query,
-                            hintText: 'Modern, Edison, Commander...',
-                          );
-                          if (created == null) return null;
-                          final String trimmed = created.trim();
-                          return trimmed.isEmpty ? null : trimmed;
-                        },
-                        onChanged: (String value) {
-                          setDialogState(() {
-                            selectedFormat = value.trim();
-                            normalizeSelectedDeck();
-                            normalizeSelectedOpponentDeck();
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      SearchableComboField(
-                        value: selectedOpponentDeckId,
-                        decoration: InputDecoration(
-                          labelText: context.txt.t('field.opponentDeck'),
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        fixedItems: <ComboItem>[
-                          ComboItem(
-                            value: '',
-                            label: context.txt.t('field.noOpponentDeck'),
-                          ),
-                        ],
-                        items: opponentDeckOptions()
-                            .map(
-                              (SideboardDeck d) =>
-                                  ComboItem(value: d.id, label: d.name),
-                            )
-                            .toList(growable: false),
-                        addLabel: context.txt.t('field.addNewDeck'),
-                        onAdd: (String query) async {
-                          final String? createdName = await promptText(
-                            title: 'New opponent deck',
-                            initialValue: query,
-                            hintText: 'Deck name',
-                          );
-                          if (createdName == null) return null;
-                          final String trimmedName = createdName.trim();
-                          if (trimmedName.isEmpty) return null;
-                          final SideboardDeck? existing = _deckByName(
-                            trimmedName,
-                          );
-                          if (existing != null) return existing.id;
-                          final SideboardDeck newDeck = SideboardDeck(
-                            id: DateTime.now().microsecondsSinceEpoch
-                                .toString(),
-                            name: trimmedName,
-                            createdAt: DateTime.now(),
-                            isFavorite: false,
-                            userNotes: '',
-                            matchups: const <SideboardMatchup>[],
-                            format: selectedFormat.trim(),
-                            tag: '',
-                            tcgKey: SupportedTcg.mtg.storageKey,
-                          );
-                          setDialogState(() {
-                            _sessionAvailableDecks = <SideboardDeck>[
-                              newDeck,
-                              ..._sessionAvailableDecks,
-                            ];
-                            _createdDecksForSession.add(newDeck);
-                          });
-                          return newDeck.id;
-                        },
-                        onChanged: (String value) {
-                          setDialogState(() {
-                            selectedOpponentDeckId = value.trim();
-                            normalizeSelectedOpponentDeck();
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      ClearableTextField(
-                        controller: tagController,
-                        decoration: const InputDecoration(
-                          labelText: 'Tag',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                    if (!_isMultiplayer) ...[
-                      SearchableComboField(
-                        value: stage,
-                        decoration: const InputDecoration(
-                          labelText: 'Game',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        items: supportedGameStages
-                            .map((String s) => ComboItem(value: s, label: s))
-                            .toList(growable: false),
-                        onChanged: (String value) {
-                          setDialogState(() {
-                            stage = value;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                    SearchableComboField(
-                      value: selectedDeckId,
-                      decoration: InputDecoration(
-                        labelText: context.txt.t('field.deckInUse'),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      fixedItems: <ComboItem>[
-                        ComboItem(
-                          value: '',
-                          label: context.txt.t('field.noDeck'),
-                        ),
-                      ],
-                      items: deckOptions()
-                          .map(
-                            (SideboardDeck d) =>
-                                ComboItem(value: d.id, label: d.name),
-                          )
-                          .toList(growable: false),
-                      addLabel: context.txt.t('field.addNewDeck'),
-                      onAdd: (String query) async {
-                        final String? createdName = await promptText(
-                          title: context.txt.t('field.addNewDeck'),
-                          initialValue: query,
-                          hintText: context.txt.t('field.deckName'),
-                        );
-                        if (createdName == null) return null;
-                        final String trimmedName = createdName.trim();
-                        if (trimmedName.isEmpty) return null;
-                        final SideboardDeck? existing = _deckByName(trimmedName);
-                        if (existing != null) return existing.id;
-                        final SideboardDeck newDeck = SideboardDeck(
-                          id: DateTime.now().microsecondsSinceEpoch.toString(),
-                          name: trimmedName,
-                          createdAt: DateTime.now(),
-                          isFavorite: false,
-                          userNotes: '',
-                          matchups: const <SideboardMatchup>[],
-                          format: selectedFormat.trim(),
-                          tag: '',
-                          tcgKey: SupportedTcg.mtg.storageKey,
-                        );
-                        setDialogState(() {
-                          _sessionAvailableDecks = <SideboardDeck>[
-                            newDeck,
-                            ..._sessionAvailableDecks,
-                          ];
-                          _createdDecksForSession.add(newDeck);
-                        });
-                        return newDeck.id;
-                      },
-                      onChanged: (String value) {
-                        setDialogState(() {
-                          selectedDeckId = value.trim();
-                          if (selectedDeckId.isEmpty) return;
-                          final SideboardDeck? linkedDeck = _deckById(
-                            selectedDeckId,
-                          );
-                          if (linkedDeck != null &&
-                              selectedFormat.trim().isEmpty &&
-                              linkedDeck.format.trim().isNotEmpty) {
-                            selectedFormat = linkedDeck.format.trim();
-                          }
-                          normalizeSelectedDeck();
-                          normalizeSelectedOpponentDeck();
-                        });
-                      },
-                    ),
-                    if (_isMultiplayer) ...[
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          context.txt.t('game.playerNames'),
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      for (
-                        int playerIndex = 0;
-                        playerIndex < widget.playerCount;
-                        playerIndex += 1
-                      ) ...[
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: ClearableTextField(
-                                controller: playerNameControllers[playerIndex],
-                                decoration: InputDecoration(
-                                  labelText: context.txt.t('game.playerName', params: <String, Object?>{'n': playerIndex + 1}),
-                                  border: const OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            SizedBox(
-                              width: 76,
-                              child: Tooltip(
-                                message:
-                                    'Change Player ${playerIndex + 1} card color',
-                                child: FilledButton.tonal(
-                                  onPressed: () => pickPlayerColor(playerIndex),
-                                  style: FilledButton.styleFrom(
-                                    minimumSize: const Size(76, 48),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 6,
-                                    ),
-                                    backgroundColor:
-                                        selectedPlayerCardColors[playerIndex],
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      side: BorderSide(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.24,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(Icons.palette_outlined, size: 18),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        context.txt.t('game.color'),
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (playerIndex != widget.playerCount - 1)
-                          const SizedBox(height: 8),
-                      ],
-                    ],
-                  ],
-                ),
+    final MatchEditorResult? result = await showMatchEditorDialog(
+      context,
+      title: context.txt.t(
+        _isMultiplayer ? 'dialog.gameDetails' : 'dialog.matchDetails',
+      ),
+      input: MatchEditorInput(
+        decks: _sessionAvailableDecks,
+        tcgKey: SupportedTcg.mtg.storageKey,
+        matchName: _matchName,
+        opponentName: _opponentName,
+        format: _matchFormat,
+        deckId: _selectedDeckIdForHistory(),
+        deckName: _deckInUse,
+        opponentDeckId: _selectedOpponentDeckIdForHistory(),
+        opponentDeckName: _opponentDeckInUse,
+        tag: _matchTag,
+        gameStage: _selectedGameStage,
+        showMatchName: !_isMultiplayer,
+        showOpponent: !_isMultiplayer,
+        showFormat: !_isMultiplayer,
+        showOpponentDeck: !_isMultiplayer,
+        showTag: !_isMultiplayer,
+        showGameStage: !_isMultiplayer,
+        showDeckInUse: true,
+        allowCreateDeck: true,
+      ),
+      extraContentBuilder: _isMultiplayer
+          ? (StateSetter setDialogState) {
+              return _buildPlayerNamesSection(
+                playerNameControllers: playerNameControllers,
+                selectedColors: selectedPlayerCardColors,
+                setDialogState: setDialogState,
               );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(context.txt.t('common.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(context.txt.t('common.save')),
-            ),
-          ],
-        );
-      },
+            }
+          : null,
     );
 
-    if (shouldSave != true) {
-      disposeTextControllersLater(<TextEditingController>[
-        matchNameController,
-        opponentController,
-        tagController,
-        ...playerNameControllers,
-      ]);
-      return;
-    }
+    disposeTextControllersLater(playerNameControllers);
 
-    if (!mounted) {
-      disposeTextControllersLater(<TextEditingController>[
-        matchNameController,
-        opponentController,
-        tagController,
-        ...playerNameControllers,
-      ]);
+    if (result == null || !mounted) {
       return;
     }
 
     setState(() {
-      _matchName = matchNameController.text.trim();
-      _opponentName = opponentController.text.trim();
-      _matchFormat = selectedFormat.trim();
-      final SideboardDeck? selectedDeckObject = _deckById(selectedDeckId);
-      final SideboardDeck? selectedOpponentDeck = _deckById(
-        selectedOpponentDeckId,
-      );
-      _selectedOpponentDeckId = selectedOpponentDeck?.id ?? '';
-      _opponentDeckInUse = selectedOpponentDeck?.name ?? '';
-      _matchTag = tagController.text.trim();
+      _matchName = result.matchName;
+      _opponentName = result.opponentName;
+      _matchFormat = result.format;
+      _matchTag = result.tag;
+      _selectedOpponentDeckId = result.opponentDeckId;
+      _opponentDeckInUse = result.opponentDeckName;
+      _selectedDeckId = result.deckId;
+      _deckInUse = result.deckName;
+      if (!_isMultiplayer) {
+        _selectedGameStage = result.gameStage;
+      }
       if (_opponentName.isNotEmpty) {
         _lastCompletedOpponentName = _opponentName;
         _lastRecordedOpponentName = _opponentName;
       }
-      _selectedDeckId = selectedDeckObject?.id ?? '';
-      _deckInUse = selectedDeckObject?.name ?? '';
-      if (!_isMultiplayer) {
-        _selectedGameStage = stage;
-      }
-      if (widget.playerCount == 2 && stage == 'G1') {
+      if (widget.playerCount == 2 && result.gameStage == 'G1') {
         _bo3Wins = 0;
         _bo3Losses = 0;
       }
       if (_isMultiplayer) {
-        for (
-          int playerIndex = 0;
-          playerIndex < widget.playerCount;
-          playerIndex += 1
-        ) {
-          _playerNames[playerIndex] = _sanitizePlayerName(
-            playerNameControllers[playerIndex].text,
-            playerIndex,
+        for (int i = 0; i < widget.playerCount; i += 1) {
+          _playerNames[i] = _sanitizePlayerName(
+            playerNameControllers[i].text,
+            i,
           );
         }
-        _playerCardBackgroundColors = List<Color>.from(
-          selectedPlayerCardColors,
-        );
+        _playerCardBackgroundColors = List<Color>.from(selectedPlayerCardColors);
+      }
+      for (final SideboardDeck newDeck in result.createdDecks) {
+        _sessionAvailableDecks = <SideboardDeck>[
+          newDeck,
+          ..._sessionAvailableDecks,
+        ];
+        _createdDecksForSession.add(newDeck);
       }
     });
-    disposeTextControllersLater(<TextEditingController>[
-      matchNameController,
-      opponentController,
-      tagController,
-      ...playerNameControllers,
-    ]);
+  }
+
+  Widget _buildPlayerNamesSection({
+    required List<TextEditingController> playerNameControllers,
+    required List<Color> selectedColors,
+    required StateSetter setDialogState,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const SizedBox(height: 12),
+        Builder(
+          builder: (BuildContext context) => Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              context.txt.t('game.playerNames'),
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (int playerIndex = 0;
+            playerIndex < widget.playerCount;
+            playerIndex += 1) ...<Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Builder(
+                  builder: (BuildContext context) => ClearableTextField(
+                    controller: playerNameControllers[playerIndex],
+                    decoration: InputDecoration(
+                      labelText: context.txt.t(
+                        'game.playerName',
+                        params: <String, Object?>{'n': playerIndex + 1},
+                      ),
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 76,
+                child: Builder(
+                  builder: (BuildContext context) => Tooltip(
+                    message: 'Change Player ${playerIndex + 1} card color',
+                    child: FilledButton.tonal(
+                      onPressed: () async {
+                        final Color? picked = await _promptPlayerCardColor(
+                          title: 'Player ${playerIndex + 1} card color',
+                          selectedColor: selectedColors[playerIndex],
+                        );
+                        if (picked == null) return;
+                        setDialogState(() {
+                          selectedColors[playerIndex] = picked;
+                        });
+                      },
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(76, 48),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 6,
+                        ),
+                        backgroundColor: selectedColors[playerIndex],
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.24),
+                          ),
+                        ),
+                      ),
+                      child: Builder(
+                        builder: (BuildContext context) => Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[
+                            const Icon(Icons.palette_outlined, size: 18),
+                            const SizedBox(height: 2),
+                            Text(
+                              context.txt.t('game.color'),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (playerIndex != widget.playerCount - 1) const SizedBox(height: 8),
+        ],
+      ],
+    );
   }
 
   void _rollDice() {

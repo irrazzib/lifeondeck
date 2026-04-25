@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/app_strings.dart';
+import '../models/game_record.dart';
 import 'clearable_text_field.dart';
 
 class TextPromptDialog extends StatefulWidget {
@@ -63,4 +64,40 @@ class _TextPromptDialogState extends State<TextPromptDialog> {
       ],
     );
   }
+}
+
+Future<String?> showTextPromptDialog(
+  BuildContext context, {
+  required String title,
+  required String initialValue,
+  required String hintText,
+  int maxLines = 1,
+}) {
+  return showDialog<String>(
+    context: context,
+    builder: (BuildContext context) {
+      return TextPromptDialog(
+        title: title,
+        initialValue: initialValue,
+        hintText: hintText,
+        maxLines: maxLines,
+      );
+    },
+  );
+}
+
+Future<GameRecord?> showNotesEditDialog(
+  BuildContext context,
+  GameRecord record, {
+  String title = 'Edit notes',
+}) async {
+  final String? result = await showTextPromptDialog(
+    context,
+    title: title,
+    initialValue: record.notes,
+    hintText: 'Write some notes...',
+    maxLines: 6,
+  );
+  if (result == null) return null;
+  return record.copyWith(notes: result.trim());
 }
