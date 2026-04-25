@@ -10,7 +10,11 @@ import '../../l10n/app_strings.dart';
 import '../../models/app_settings.dart';
 import '../../models/game_record.dart';
 import '../../models/sideboard.dart';
+import '../../services/api_client.dart';
+import '../../services/auth_service.dart';
+import '../../services/sync_service.dart';
 import '../customize/customize_screen.dart';
+import '../profile/profile_screen.dart';
 import '../duel/duel_screen.dart';
 import '../game_selection/game_selection_screen.dart';
 import '../history/game_history_screen.dart';
@@ -45,6 +49,11 @@ class _HomeScreenState extends State<HomeScreen> {
   SupportedTcg _selectedGame = SupportedTcg.yugioh;
   String _saveDebugStatus = 'idle';
   Future<void> _queuedCheckpointSave = Future<void>.value();
+
+  // Auth / sync services (initialised in initState).
+  late final ApiClient _apiClient;
+  late final AuthService _authService;
+  late final SyncService _syncService;
 
   String get _selectedTcgKey => _selectedGame.storageKey;
   bool get _isImplementedGame =>
@@ -492,7 +501,53 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadStoredData();
+    _apiClient = ApiClient();
+    _authService = AuthService(_apiClient);
+    _syncService = SyncService(
+      apiClient: _apiClient,
+      authService: _authService,
+    );
+    _authService.addListener(_onAuthStateChanged);
+    _initWithSync();
+  }
+
+  Future<void> _initWithSync() async {
+    await _loadStoredData();
+    await _authService.initialize();
+    if (_authService.isAuthenticated) {
+      _setupSync();
+    }
+  }
+
+  void _setupSync() {
+    _syncService.onGetPayload = () => AppSyncPayload(
+      gameRecords: _gameRecords
+          .map((GameRecord r) => r.toJson())
+          .toList(growable: false),
+      sideboardDecks: _sideboardDecks
+          .map((SideboardDeck d) => d.toJson())
+          .toList(growable: false),
+      appSettings: _settings.toJson(),
+    );
+    _syncService.onApplyPull = (Map<String, dynamic> pulled) async {
+      final List<GameRecord>? remoteRecords = (pulled['gameRecords'] as List?)
+          ?.whereType<Map<String, dynamic>>()
+          .map(GameRecord.fromJson)
+          .toList(growable: false);
+      final List<SideboardDeck>? remoteDecks =
+          (pulled['sideboardDecks'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(SideboardDeck.fromJson)
+              .toList(growable: false);
+      if (remoteRecords != null && remoteRecords.isNotEmpty) {
+        setState(() => _gameRecords = remoteRecords);
+      }
+      if (remoteDecks != null && remoteDecks.isNotEmpty) {
+        setState(() => _sideboardDecks = remoteDecks);
+      }
+      await _persistState();
+    };
+    _syncService.startAutoSync();
   }
 
   Future<void> _loadStoredData() async {
@@ -622,6 +677,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     await prefs.setString(_lastDeckByTcgKey, jsonEncode(_lastDeckByTcg));
+    if (_authService.isAuthenticated) {
+      _syncService.markDirty();
+    }
   }
 
   Future<void> _completeOnboarding() async {
@@ -948,6 +1006,35 @@ class _HomeScreenState extends State<HomeScreen> {
     await _persistState();
   }
 
+  void _onAuthStateChanged() {
+    if (!mounted) return;
+    setState(() {});
+    if (_authService.isAuthenticated) {
+      _setupSync();
+    } else {
+      _syncService.stopAutoSync();
+    }
+  }
+
+  Future<void> _openProfile() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ProfileScreen(
+          authService: _authService,
+          syncService: _syncService,
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _authService.removeListener(_onAuthStateChanged);
+    _syncService.dispose();
+    _authService.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppStrings txt = context.txt;
@@ -1091,6 +1178,22 @@ class _HomeScreenState extends State<HomeScreen> {
                           backgroundColor: activeSettings.buttonColor,
                           onPressed: _openCustomize,
                           locked: !_premiumUnlocked,
+                        ),
+                        const SizedBox(height: 12),
+                        ModeButton(
+                          icon: Icons.account_circle_outlined,
+                          title: txt.t('account.title'),
+                          subtitle: _authService.isAuthenticated
+                              ? txt.t(
+                                  'account.subtitleSignedIn',
+                                  params: <String, Object?>{
+                                    'displayName':
+                                        _authService.currentUser!.displayName,
+                                  },
+                                )
+                              : txt.t('account.subtitleSignedOut'),
+                          backgroundColor: activeSettings.buttonColor,
+                          onPressed: _openProfile,
                         ),
                         const Spacer(),
                       ] else ...[

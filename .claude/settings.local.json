@@ -3,7 +3,13 @@
     "allow": [
       "Bash(python3 *)",
       "Bash(flutter analyze *)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(dotnet --version)",
+      "Bash(dotnet new *)",
+      "Bash(dotnet sln *)",
+      "Bash(dotnet add *)",
+      "Bash(dotnet build *)",
+      "Bash(dart analyze *)"
     ]
   }
 }
