@@ -7,6 +7,7 @@ import '../../l10n/app_strings.dart';
 import '../../models/game_record.dart';
 import '../../models/match.dart';
 import '../../models/sideboard.dart';
+import '../../widgets/searchable_combo_field.dart';
 import '../../widgets/text_prompt_dialog.dart';
 import 'match_detail_screen.dart';
 import 'dart:async';
@@ -629,124 +630,94 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey<String>(
-                        'deck_${selectedDeckId}_$customDeckName',
-                      ),
-                      initialValue: selectedDeckId.isNotEmpty
+                    SearchableComboField(
+                      value: selectedDeckId.isNotEmpty
                           ? selectedDeckId
                           : (customDeckName.isNotEmpty
                                 ? '__custom_deck__'
-                                : null),
+                                : ''),
                       decoration: const InputDecoration(
                         labelText: 'Deck',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
-                      items: <DropdownMenuItem<String>>[
-                        DropdownMenuItem<String>(
+                      fixedItems: <ComboItem>[
+                        ComboItem(
                           value: '',
-                          child: Text(context.txt.t('field.noDeck')),
-                        ),
-                        ...widget.decks.map((SideboardDeck deck) {
-                          return DropdownMenuItem<String>(
-                            value: deck.id,
-                            child: Text(
-                              deck.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }),
-                        if (customDeckName.isNotEmpty)
-                          DropdownMenuItem<String>(
-                            value: '__custom_deck__',
-                            child: Text(
-                              customDeckName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        DropdownMenuItem<String>(
-                          value: '__add_deck__',
-                          child: Text(context.txt.t('field.addNewDeck')),
+                          label: context.txt.t('field.noDeck'),
                         ),
                       ],
-                      onChanged: (String? nextValue) async {
-                        if (nextValue == '__add_deck__') {
-                          final String? created = await _promptText(
-                            title: context.txt.t('field.addNewDeck'),
-                            initialValue: customDeckName,
-                            hintText: context.txt.t('field.deckName'),
-                          );
-                          if (created == null) {
-                            return;
-                          }
-                          final String trimmed = created.trim();
-                          if (trimmed.isEmpty) {
-                            return;
-                          }
-                          setDialogState(() {
-                            selectedDeckId = '';
-                            customDeckName = trimmed;
-                          });
-                          return;
-                        }
-                        if (nextValue == '__custom_deck__') {
-                          return;
-                        }
+                      items: <ComboItem>[
+                        ...widget.decks.map(
+                          (SideboardDeck d) =>
+                              ComboItem(value: d.id, label: d.name),
+                        ),
+                        if (customDeckName.isNotEmpty)
+                          ComboItem(
+                            value: '__custom_deck__',
+                            label: customDeckName,
+                          ),
+                      ],
+                      addLabel: context.txt.t('field.addNewDeck'),
+                      onAdd: (String query) async {
+                        final String? created = await _promptText(
+                          title: context.txt.t('field.addNewDeck'),
+                          initialValue: customDeckName.isNotEmpty
+                              ? customDeckName
+                              : query,
+                          hintText: context.txt.t('field.deckName'),
+                        );
+                        if (created == null) return null;
+                        final String trimmed = created.trim();
+                        if (trimmed.isEmpty) return null;
                         setDialogState(() {
-                          selectedDeckId = (nextValue ?? '').trim();
+                          selectedDeckId = '';
+                          customDeckName = trimmed;
+                        });
+                        return '__custom_deck__';
+                      },
+                      onChanged: (String nextValue) {
+                        if (nextValue == '__custom_deck__') return;
+                        setDialogState(() {
+                          selectedDeckId = nextValue.trim();
                           customDeckName = '';
                         });
                       },
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: stage,
+                    SearchableComboField(
+                      value: stage,
                       decoration: const InputDecoration(
                         labelText: 'Game',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
                       items: supportedGameStages
-                          .map((String item) {
-                            return DropdownMenuItem<String>(
-                              value: item,
-                              child: Text(item),
-                            );
-                          })
+                          .map((String s) => ComboItem(value: s, label: s))
                           .toList(growable: false),
-                      onChanged: (String? nextValue) {
-                        if (nextValue == null) {
-                          return;
-                        }
+                      onChanged: (String nextValue) {
                         setDialogState(() {
                           stage = nextValue;
                         });
                       },
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: result.isEmpty ? null : result,
+                    SearchableComboField(
+                      value: result,
                       decoration: const InputDecoration(
                         labelText: 'Result',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
-                      items: <DropdownMenuItem<String>>[
-                        const DropdownMenuItem<String>(
-                          value: '',
-                          child: Text('No result'),
-                        ),
-                        ...supportedMatchResults.map((String item) {
-                          return DropdownMenuItem<String>(
-                            value: item,
-                            child: Text(item),
-                          );
-                        }),
+                      fixedItems: const <ComboItem>[
+                        ComboItem(value: '', label: 'No result'),
                       ],
-                      onChanged: (String? nextValue) {
+                      items: supportedMatchResults
+                          .map((String s) => ComboItem(value: s, label: s))
+                          .toList(growable: false),
+                      onChanged: (String nextValue) {
                         setDialogState(() {
-                          result = (nextValue ?? '').trim();
+                          result = nextValue.trim();
                         });
                       },
                     ),
@@ -1158,101 +1129,77 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey<String>(
-                        'deck_${selectedDeckId}_$customDeckName',
-                      ),
-                      initialValue: selectedDeckId.isNotEmpty
+                    SearchableComboField(
+                      value: selectedDeckId.isNotEmpty
                           ? selectedDeckId
                           : (customDeckName.isNotEmpty
                                 ? '__custom_deck__'
-                                : null),
+                                : ''),
                       decoration: InputDecoration(
                         labelText: context.txt.t('field.deck'),
                         border: const OutlineInputBorder(),
                         isDense: true,
                       ),
-                      items: <DropdownMenuItem<String>>[
-                        DropdownMenuItem<String>(
+                      fixedItems: <ComboItem>[
+                        ComboItem(
                           value: '',
-                          child: Text(context.txt.t('field.noDeck')),
-                        ),
-                        ...widget.decks.map((SideboardDeck deck) {
-                          return DropdownMenuItem<String>(
-                            value: deck.id,
-                            child: Text(
-                              deck.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }),
-                        if (customDeckName.isNotEmpty)
-                          DropdownMenuItem<String>(
-                            value: '__custom_deck__',
-                            child: Text(
-                              customDeckName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        DropdownMenuItem<String>(
-                          value: '__add_deck__',
-                          child: Text(context.txt.t('field.addNewDeck')),
+                          label: context.txt.t('field.noDeck'),
                         ),
                       ],
-                      onChanged: (String? nextValue) async {
-                        if (nextValue == '__add_deck__') {
-                          final String? created = await _promptText(
-                            title: context.txt.t('field.addNewDeck'),
-                            initialValue: customDeckName,
-                            hintText: context.txt.t('field.deckName'),
-                          );
-                          if (created == null) {
-                            return;
-                          }
-                          final String trimmed = created.trim();
-                          if (trimmed.isEmpty) {
-                            return;
-                          }
-                          setDialogState(() {
-                            selectedDeckId = '';
-                            customDeckName = trimmed;
-                          });
-                          return;
-                        }
-                        if (nextValue == '__custom_deck__') {
-                          return;
-                        }
+                      items: <ComboItem>[
+                        ...widget.decks.map(
+                          (SideboardDeck d) =>
+                              ComboItem(value: d.id, label: d.name),
+                        ),
+                        if (customDeckName.isNotEmpty)
+                          ComboItem(
+                            value: '__custom_deck__',
+                            label: customDeckName,
+                          ),
+                      ],
+                      addLabel: context.txt.t('field.addNewDeck'),
+                      onAdd: (String query) async {
+                        final String? created = await _promptText(
+                          title: context.txt.t('field.addNewDeck'),
+                          initialValue: customDeckName.isNotEmpty
+                              ? customDeckName
+                              : query,
+                          hintText: context.txt.t('field.deckName'),
+                        );
+                        if (created == null) return null;
+                        final String trimmed = created.trim();
+                        if (trimmed.isEmpty) return null;
                         setDialogState(() {
-                          selectedDeckId = (nextValue ?? '').trim();
+                          selectedDeckId = '';
+                          customDeckName = trimmed;
+                        });
+                        return '__custom_deck__';
+                      },
+                      onChanged: (String nextValue) {
+                        if (nextValue == '__custom_deck__') return;
+                        setDialogState(() {
+                          selectedDeckId = nextValue.trim();
                           customDeckName = '';
                         });
                       },
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedResult.isEmpty
-                          ? null
-                          : selectedResult,
+                    SearchableComboField(
+                      value: selectedResult,
                       decoration: const InputDecoration(
                         labelText: 'Result',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
-                      items: <DropdownMenuItem<String>>[
-                        const DropdownMenuItem<String>(
-                          value: '',
-                          child: Text('No result'),
-                        ),
-                        ...supportedMatchResults.map((String item) {
-                          return DropdownMenuItem<String>(
-                            value: item,
-                            child: Text(item),
-                          );
-                        }),
+                      fixedItems: const <ComboItem>[
+                        ComboItem(value: '', label: 'No result'),
                       ],
-                      onChanged: (String? nextValue) {
+                      items: supportedMatchResults
+                          .map((String s) => ComboItem(value: s, label: s))
+                          .toList(growable: false),
+                      onChanged: (String nextValue) {
                         setDialogState(() {
-                          selectedResult = (nextValue ?? '').trim();
+                          selectedResult = nextValue.trim();
                         });
                       },
                     ),
@@ -1530,33 +1477,28 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: effectiveSelectedDeckFilter.isEmpty
-                                ? null
-                                : effectiveSelectedDeckFilter,
+                          child: SearchableComboField(
+                            value: effectiveSelectedDeckFilter,
                             decoration: InputDecoration(
                               labelText: txt.t('field.deck'),
                               border: const OutlineInputBorder(),
                               isDense: true,
                             ),
-                            items: <DropdownMenuItem<String>>[
-                              DropdownMenuItem<String>(
+                            fixedItems: <ComboItem>[
+                              ComboItem(
                                 value: '',
-                                child: Text(txt.t('history.allDecks')),
+                                label: txt.t('history.allDecks'),
                               ),
-                              ...deckOptions.map((FilterOption option) {
-                                return DropdownMenuItem<String>(
-                                  value: option.value,
-                                  child: Text(
-                                    option.label,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              }),
                             ],
-                            onChanged: (String? value) {
+                            items: deckOptions
+                                .map(
+                                  (FilterOption o) =>
+                                      ComboItem(value: o.value, label: o.label),
+                                )
+                                .toList(growable: false),
+                            onChanged: (String value) {
                               setState(() {
-                                _selectedMatchDeckFilter = (value ?? '').trim();
+                                _selectedMatchDeckFilter = value.trim();
                                 _resetVisibleMatchCount();
                               });
                             },
@@ -1564,37 +1506,28 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue:
-                                effectiveSelectedOpponentDeckFilter.isEmpty
-                                ? null
-                                : effectiveSelectedOpponentDeckFilter,
+                          child: SearchableComboField(
+                            value: effectiveSelectedOpponentDeckFilter,
                             decoration: InputDecoration(
                               labelText: txt.t('field.opponentDeck'),
                               border: const OutlineInputBorder(),
                               isDense: true,
                             ),
-                            items: <DropdownMenuItem<String>>[
-                              DropdownMenuItem<String>(
+                            fixedItems: <ComboItem>[
+                              ComboItem(
                                 value: '',
-                                child: Text(txt.t('history.allOpponentDecks')),
+                                label: txt.t('history.allOpponentDecks'),
                               ),
-                              ...opponentDeckOptions.map((
-                                FilterOption option,
-                              ) {
-                                return DropdownMenuItem<String>(
-                                  value: option.value,
-                                  child: Text(
-                                    option.label,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              }),
                             ],
-                            onChanged: (String? value) {
+                            items: opponentDeckOptions
+                                .map(
+                                  (FilterOption o) =>
+                                      ComboItem(value: o.value, label: o.label),
+                                )
+                                .toList(growable: false),
+                            onChanged: (String value) {
                               setState(() {
-                                _selectedMatchOpponentDeckFilter = (value ?? '')
-                                    .trim();
+                                _selectedMatchOpponentDeckFilter = value.trim();
                                 _resetVisibleMatchCount();
                               });
                             },
@@ -1609,35 +1542,28 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                       children: [
                         if (availableFormats.isNotEmpty)
                           Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue:
-                                  effectiveSelectedFormatFilter.isEmpty
-                                  ? null
-                                  : effectiveSelectedFormatFilter,
+                            child: SearchableComboField(
+                              value: effectiveSelectedFormatFilter,
                               decoration: InputDecoration(
                                 labelText: txt.t('field.format'),
                                 border: const OutlineInputBorder(),
                                 isDense: true,
                               ),
-                              items: <DropdownMenuItem<String>>[
-                                DropdownMenuItem<String>(
+                              fixedItems: <ComboItem>[
+                                ComboItem(
                                   value: '',
-                                  child: Text(txt.t('history.allFormats')),
+                                  label: txt.t('history.allFormats'),
                                 ),
-                                ...availableFormats.map((String format) {
-                                  return DropdownMenuItem<String>(
-                                    value: format,
-                                    child: Text(
-                                      format,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  );
-                                }),
                               ],
-                              onChanged: (String? value) {
+                              items: availableFormats
+                                  .map(
+                                    (String f) =>
+                                        ComboItem(value: f, label: f),
+                                  )
+                                  .toList(growable: false),
+                              onChanged: (String value) {
                                 setState(() {
-                                  _selectedMatchFormatFilter = (value ?? '')
-                                      .trim();
+                                  _selectedMatchFormatFilter = value.trim();
                                   _resetVisibleMatchCount();
                                 });
                               },
@@ -1648,34 +1574,28 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                           const SizedBox(width: 12),
                         if (availableTags.isNotEmpty)
                           Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: effectiveSelectedTagFilter.isEmpty
-                                  ? null
-                                  : effectiveSelectedTagFilter,
+                            child: SearchableComboField(
+                              value: effectiveSelectedTagFilter,
                               decoration: InputDecoration(
                                 labelText: txt.t('field.tag'),
                                 border: const OutlineInputBorder(),
                                 isDense: true,
                               ),
-                              items: <DropdownMenuItem<String>>[
-                                DropdownMenuItem<String>(
+                              fixedItems: <ComboItem>[
+                                ComboItem(
                                   value: '',
-                                  child: Text(txt.t('history.allTags')),
+                                  label: txt.t('history.allTags'),
                                 ),
-                                ...availableTags.map((String tag) {
-                                  return DropdownMenuItem<String>(
-                                    value: tag,
-                                    child: Text(
-                                      tag,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  );
-                                }),
                               ],
-                              onChanged: (String? value) {
+                              items: availableTags
+                                  .map(
+                                    (String t) =>
+                                        ComboItem(value: t, label: t),
+                                  )
+                                  .toList(growable: false),
+                              onChanged: (String value) {
                                 setState(() {
-                                  _selectedMatchTagFilter = (value ?? '')
-                                      .trim();
+                                  _selectedMatchTagFilter = value.trim();
                                   _resetVisibleMatchCount();
                                 });
                               },
@@ -2060,33 +1980,26 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            isExpanded: true,
-                            initialValue: selectedDeckId,
+                          SearchableComboField(
+                            value: selectedDeckId,
                             decoration: const InputDecoration(
                               labelText: 'Deck',
                               border: OutlineInputBorder(),
                               isDense: true,
                             ),
-                            items: <DropdownMenuItem<String>>[
-                              DropdownMenuItem<String>(
+                            fixedItems: <ComboItem>[
+                              ComboItem(
                                 value: '',
-                                child: Text(context.txt.t('field.noDeck')),
+                                label: context.txt.t('field.noDeck'),
                               ),
-                              ...widget.decks.map((SideboardDeck deck) {
-                                return DropdownMenuItem<String>(
-                                  value: deck.id,
-                                  child: Text(
-                                    deck.name,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              }),
                             ],
-                            onChanged: (String? deckId) {
-                              if (deckId == null) {
-                                return;
-                              }
+                            items: widget.decks
+                                .map(
+                                  (SideboardDeck d) =>
+                                      ComboItem(value: d.id, label: d.name),
+                                )
+                                .toList(growable: false),
+                            onChanged: (String deckId) {
                               final SideboardDeck? linkedDeck = _deckById(
                                 deckId,
                               );

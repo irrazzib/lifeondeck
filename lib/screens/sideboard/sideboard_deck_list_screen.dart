@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants.dart';
 import '../../l10n/app_strings.dart';
+import '../../widgets/searchable_combo_field.dart';
 import '../../models/app_settings.dart';
 import '../../models/game_record.dart';
 import '../../models/sideboard.dart';
@@ -755,34 +756,28 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                             ),
                             const SizedBox(height: 8),
                             if (availableFormats.isNotEmpty)
-                              DropdownButtonFormField<String>(
-                                initialValue: effectiveFormatFilter.isEmpty
-                                    ? null
-                                    : effectiveFormatFilter,
+                              SearchableComboField(
+                                value: effectiveFormatFilter,
                                 decoration: InputDecoration(
                                   labelText: txt.t('field.format'),
                                   border: const OutlineInputBorder(),
                                   isDense: true,
                                 ),
-                                items: <DropdownMenuItem<String>>[
-                                  DropdownMenuItem<String>(
+                                fixedItems: <ComboItem>[
+                                  ComboItem(
                                     value: '',
-                                    child: Text(txt.t('deckList.allFormats')),
+                                    label: txt.t('deckList.allFormats'),
                                   ),
-                                  ...availableFormats.map((String format) {
-                                    return DropdownMenuItem<String>(
-                                      value: format,
-                                      child: Text(
-                                        format,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    );
-                                  }),
                                 ],
-                                onChanged: (String? value) {
+                                items: availableFormats
+                                    .map(
+                                      (String f) =>
+                                          ComboItem(value: f, label: f),
+                                    )
+                                    .toList(growable: false),
+                                onChanged: (String value) {
                                   setState(() {
-                                    _selectedDeckFormatFilter = (value ?? '')
-                                        .trim();
+                                    _selectedDeckFormatFilter = value.trim();
                                     _visibleDeckCount = _deckPageSize;
                                   });
                                 },
@@ -791,34 +786,28 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                                 availableTags.isNotEmpty)
                               const SizedBox(height: 12),
                             if (availableTags.isNotEmpty)
-                              DropdownButtonFormField<String>(
-                                initialValue: effectiveTagFilter.isEmpty
-                                    ? null
-                                    : effectiveTagFilter,
+                              SearchableComboField(
+                                value: effectiveTagFilter,
                                 decoration: InputDecoration(
                                   labelText: txt.t('field.tag'),
                                   border: const OutlineInputBorder(),
                                   isDense: true,
                                 ),
-                                items: <DropdownMenuItem<String>>[
-                                  DropdownMenuItem<String>(
+                                fixedItems: <ComboItem>[
+                                  ComboItem(
                                     value: '',
-                                    child: Text(txt.t('deckList.allTags')),
+                                    label: txt.t('deckList.allTags'),
                                   ),
-                                  ...availableTags.map((String tag) {
-                                    return DropdownMenuItem<String>(
-                                      value: tag,
-                                      child: Text(
-                                        tag,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    );
-                                  }),
                                 ],
-                                onChanged: (String? value) {
+                                items: availableTags
+                                    .map(
+                                      (String t) =>
+                                          ComboItem(value: t, label: t),
+                                    )
+                                    .toList(growable: false),
+                                onChanged: (String value) {
                                   setState(() {
-                                    _selectedDeckTagFilter = (value ?? '')
-                                        .trim();
+                                    _selectedDeckTagFilter = value.trim();
                                     _visibleDeckCount = _deckPageSize;
                                   });
                                 },

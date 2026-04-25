@@ -10,6 +10,7 @@ import '../../models/app_settings.dart';
 import '../../models/game_record.dart';
 import '../../models/sideboard.dart';
 import '../../widgets/clearable_text_field.dart';
+import '../../widgets/searchable_combo_field.dart';
 import '../../widgets/text_prompt_dialog.dart';
 import '../../core/ux_state.dart';
 import '../mtg/mtg_duel_screen.dart';
@@ -1474,53 +1475,34 @@ class _DuelScreenState extends State<DuelScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedFormat,
+                    SearchableComboField(
+                      value: selectedFormat,
                       decoration: InputDecoration(
                         labelText: context.txt.t('field.format'),
                         border: const OutlineInputBorder(),
                         isDense: true,
                       ),
-                      items: <DropdownMenuItem<String>>[
-                        DropdownMenuItem<String>(
+                      fixedItems: <ComboItem>[
+                        ComboItem(
                           value: '',
-                          child: Text(context.txt.t('field.noFormat')),
-                        ),
-                        ...formatOptions().map((String format) {
-                          return DropdownMenuItem<String>(
-                            value: format,
-                            child: Text(format),
-                          );
-                        }),
-                        DropdownMenuItem<String>(
-                          value: '__add_format__',
-                          child: Text(context.txt.t('field.addNewFormat')),
+                          label: context.txt.t('field.noFormat'),
                         ),
                       ],
-                      onChanged: (String? value) async {
-                        if (value == null) {
-                          return;
-                        }
-                        if (value == '__add_format__') {
-                          final String? created = await promptText(
-                            title: 'New format',
-                            initialValue: '',
-                            hintText: 'Modern, Edison, Commander...',
-                          );
-                          if (created == null) {
-                            return;
-                          }
-                          final String trimmed = created.trim();
-                          if (trimmed.isEmpty) {
-                            return;
-                          }
-                          setDialogState(() {
-                            selectedFormat = trimmed;
-                            normalizeSelectedDeck();
-                            normalizeSelectedOpponentDeck();
-                          });
-                          return;
-                        }
+                      items: formatOptions()
+                          .map((String f) => ComboItem(value: f, label: f))
+                          .toList(growable: false),
+                      addLabel: context.txt.t('field.addNewFormat'),
+                      onAdd: (String query) async {
+                        final String? created = await promptText(
+                          title: 'New format',
+                          initialValue: query,
+                          hintText: 'Modern, Edison, Commander...',
+                        );
+                        if (created == null) return null;
+                        final String trimmed = created.trim();
+                        return trimmed.isEmpty ? null : trimmed;
+                      },
+                      onChanged: (String value) {
                         setDialogState(() {
                           selectedFormat = value.trim();
                           normalizeSelectedDeck();
@@ -1529,84 +1511,62 @@ class _DuelScreenState extends State<DuelScreen> {
                       },
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedOpponentDeckId,
+                    SearchableComboField(
+                      value: selectedOpponentDeckId,
                       decoration: InputDecoration(
                         labelText: context.txt.t('field.opponentDeck'),
                         border: const OutlineInputBorder(),
                         isDense: true,
                       ),
-                      items: <DropdownMenuItem<String>>[
-                        DropdownMenuItem<String>(
+                      fixedItems: <ComboItem>[
+                        ComboItem(
                           value: '',
-                          child: Text(context.txt.t('field.noOpponentDeck')),
-                        ),
-                        ...opponentDeckOptions().map((SideboardDeck deck) {
-                          return DropdownMenuItem<String>(
-                            value: deck.id,
-                            child: Text(
-                              deck.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }),
-                        const DropdownMenuItem<String>(
-                          value: '__add_opponent_deck__',
-                          child: Text('Add new deck...'),
+                          label: context.txt.t('field.noOpponentDeck'),
                         ),
                       ],
-                      onChanged: (String? value) async {
-                        if (value == null) {
-                          return;
-                        }
-                        if (value == '__add_opponent_deck__') {
-                          final String? createdName = await promptText(
-                            title: 'New opponent deck',
-                            initialValue: '',
-                            hintText: 'Deck name',
-                          );
-                          if (createdName == null) {
-                            return;
-                          }
-                          final String trimmedName = createdName.trim();
-                          if (trimmedName.isEmpty) {
-                            return;
-                          }
-                          final SideboardDeck? existing = _deckByName(
-                            trimmedName,
-                          );
-                          if (existing != null) {
-                            setDialogState(() {
-                              selectedOpponentDeckId = existing.id;
-                              normalizeSelectedOpponentDeck();
-                            });
-                            return;
-                          }
-                          final SideboardDeck newDeck = SideboardDeck(
-                            id: DateTime.now().microsecondsSinceEpoch
-                                .toString(),
-                            name: trimmedName,
-                            createdAt: DateTime.now(),
-                            isFavorite: false,
-                            userNotes: '',
-                            matchups: const <SideboardMatchup>[],
-                            format: selectedFormat.trim(),
-                            tag: '',
-                            tcgKey: _isMtgRules
-                                ? SupportedTcg.mtg.storageKey
-                                : SupportedTcg.yugioh.storageKey,
-                          );
-                          setDialogState(() {
-                            _sessionAvailableDecks = <SideboardDeck>[
-                              newDeck,
-                              ..._sessionAvailableDecks,
-                            ];
-                            _createdDecksForSession.add(newDeck);
-                            selectedOpponentDeckId = newDeck.id;
-                            normalizeSelectedOpponentDeck();
-                          });
-                          return;
-                        }
+                      items: opponentDeckOptions()
+                          .map(
+                            (SideboardDeck d) =>
+                                ComboItem(value: d.id, label: d.name),
+                          )
+                          .toList(growable: false),
+                      addLabel: context.txt.t('field.addNewDeck'),
+                      onAdd: (String query) async {
+                        final String? createdName = await promptText(
+                          title: 'New opponent deck',
+                          initialValue: query,
+                          hintText: 'Deck name',
+                        );
+                        if (createdName == null) return null;
+                        final String trimmedName = createdName.trim();
+                        if (trimmedName.isEmpty) return null;
+                        final SideboardDeck? existing = _deckByName(
+                          trimmedName,
+                        );
+                        if (existing != null) return existing.id;
+                        final SideboardDeck newDeck = SideboardDeck(
+                          id: DateTime.now().microsecondsSinceEpoch.toString(),
+                          name: trimmedName,
+                          createdAt: DateTime.now(),
+                          isFavorite: false,
+                          userNotes: '',
+                          matchups: const <SideboardMatchup>[],
+                          format: selectedFormat.trim(),
+                          tag: '',
+                          tcgKey: _isMtgRules
+                              ? SupportedTcg.mtg.storageKey
+                              : SupportedTcg.yugioh.storageKey,
+                        );
+                        setDialogState(() {
+                          _sessionAvailableDecks = <SideboardDeck>[
+                            newDeck,
+                            ..._sessionAvailableDecks,
+                          ];
+                          _createdDecksForSession.add(newDeck);
+                        });
+                        return newDeck.id;
+                      },
+                      onChanged: (String value) {
                         setDialogState(() {
                           selectedOpponentDeckId = value.trim();
                           normalizeSelectedOpponentDeck();
@@ -1623,59 +1583,46 @@ class _DuelScreenState extends State<DuelScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: stage,
+                    SearchableComboField(
+                      value: stage,
                       decoration: const InputDecoration(
                         labelText: 'Game',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
                       items: supportedGameStages
-                          .map((String item) {
-                            return DropdownMenuItem<String>(
-                              value: item,
-                              child: Text(item),
-                            );
-                          })
+                          .map((String s) => ComboItem(value: s, label: s))
                           .toList(growable: false),
-                      onChanged: (String? value) {
-                        if (value == null) {
-                          return;
-                        }
+                      onChanged: (String value) {
                         setDialogState(() {
                           stage = value;
                         });
                       },
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedDeckId,
+                    SearchableComboField(
+                      value: selectedDeckId,
                       decoration: InputDecoration(
                         labelText: context.txt.t('field.deckInUse'),
                         border: const OutlineInputBorder(),
                         isDense: true,
                       ),
-                      items: <DropdownMenuItem<String>>[
-                        DropdownMenuItem<String>(
+                      fixedItems: <ComboItem>[
+                        ComboItem(
                           value: '',
-                          child: Text(context.txt.t('field.noDeck')),
+                          label: context.txt.t('field.noDeck'),
                         ),
-                        ...deckOptions().map((SideboardDeck deck) {
-                          return DropdownMenuItem<String>(
-                            value: deck.id,
-                            child: Text(deck.name),
-                          );
-                        }),
                       ],
-                      onChanged: (String? value) {
-                        if (value == null) {
-                          return;
-                        }
+                      items: deckOptions()
+                          .map(
+                            (SideboardDeck d) =>
+                                ComboItem(value: d.id, label: d.name),
+                          )
+                          .toList(growable: false),
+                      onChanged: (String value) {
                         setDialogState(() {
                           selectedDeckId = value.trim();
-                          if (selectedDeckId.isEmpty) {
-                            return;
-                          }
+                          if (selectedDeckId.isEmpty) return;
                           final SideboardDeck? linkedDeck = _deckById(
                             selectedDeckId,
                           );
