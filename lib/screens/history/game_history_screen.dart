@@ -43,6 +43,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   late final ScrollController _matchListController;
   late final TextEditingController _opponentNameFilterController;
   int _visibleMatchCount = _matchPageSize;
+  bool _filtersExpanded = true;
 
   @override
   void initState() {
@@ -1054,16 +1055,22 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     DateTime selectedDate = now;
     String selectedDeckId = '';
     String customDeckName = '';
-    String selectedResult = '';
+    String selectedOpponentDeckId = '';
+    String customOpponentDeckName = '';
+    final List<String> gameResults = <String>['', '', ''];
+    const List<String> gameStageLabels = <String>['G1', 'G2', 'G3'];
 
     final bool? shouldCreate = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(context.txt.t('history.addMatch')),
-          content: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setDialogState) {
-              return SingleChildScrollView(
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            final bool canSave = gameResults.any(
+              (String r) => r.isNotEmpty,
+            );
+            return AlertDialog(
+              title: Text(context.txt.t('history.addMatch')),
+              content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
@@ -1185,39 +1192,140 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                     ),
                     const SizedBox(height: 10),
                     SearchableComboField(
-                      value: selectedResult,
-                      decoration: const InputDecoration(
-                        labelText: 'Result',
-                        border: OutlineInputBorder(),
+                      value: selectedOpponentDeckId.isNotEmpty
+                          ? selectedOpponentDeckId
+                          : (customOpponentDeckName.isNotEmpty
+                                ? '__custom_opp_deck__'
+                                : ''),
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.opponentDeck'),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
-                      fixedItems: const <ComboItem>[
-                        ComboItem(value: '', label: 'No result'),
+                      fixedItems: <ComboItem>[
+                        ComboItem(
+                          value: '',
+                          label: context.txt.t('field.noDeck'),
+                        ),
                       ],
-                      items: supportedMatchResults
-                          .map((String s) => ComboItem(value: s, label: s))
-                          .toList(growable: false),
-                      onChanged: (String nextValue) {
+                      items: <ComboItem>[
+                        ...widget.decks.map(
+                          (SideboardDeck d) =>
+                              ComboItem(value: d.id, label: d.name),
+                        ),
+                        if (customOpponentDeckName.isNotEmpty)
+                          ComboItem(
+                            value: '__custom_opp_deck__',
+                            label: customOpponentDeckName,
+                          ),
+                      ],
+                      addLabel: context.txt.t('field.addNewDeck'),
+                      onAdd: (String query) async {
+                        final String? created = await _promptText(
+                          title: context.txt.t('field.addNewDeck'),
+                          initialValue: customOpponentDeckName.isNotEmpty
+                              ? customOpponentDeckName
+                              : query,
+                          hintText: context.txt.t('field.deckName'),
+                        );
+                        if (created == null) return null;
+                        final String trimmed = created.trim();
+                        if (trimmed.isEmpty) return null;
                         setDialogState(() {
-                          selectedResult = nextValue.trim();
+                          selectedOpponentDeckId = '';
+                          customOpponentDeckName = trimmed;
+                        });
+                        return '__custom_opp_deck__';
+                      },
+                      onChanged: (String nextValue) {
+                        if (nextValue == '__custom_opp_deck__') return;
+                        setDialogState(() {
+                          selectedOpponentDeckId = nextValue.trim();
+                          customOpponentDeckName = '';
                         });
                       },
                     ),
+                    const SizedBox(height: 14),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Games',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    for (int i = 0; i < 3; i++) ...<Widget>[
+                      Row(
+                        children: <Widget>[
+                          SizedBox(
+                            width: 28,
+                            child: Text(
+                              gameStageLabels[i],
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: SearchableComboField(
+                              value: gameResults[i],
+                              decoration: const InputDecoration(
+                                labelText: 'Result',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              fixedItems: const <ComboItem>[
+                                ComboItem(value: '', label: 'No result'),
+                              ],
+                              items: supportedMatchResults
+                                  .map(
+                                    (String s) =>
+                                        ComboItem(value: s, label: s),
+                                  )
+                                  .toList(growable: false),
+                              onChanged: (String nextValue) {
+                                setDialogState(() {
+                                  gameResults[i] = nextValue.trim();
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (i < 2) const SizedBox(height: 8),
+                    ],
+                    if (!canSave) ...<Widget>[
+                      const SizedBox(height: 8),
+                      Text(
+                        'At least one game result is required.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.red.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-              );
-            },
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(context.txt.t('common.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(context.txt.t('common.save')),
-            ),
-          ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(context.txt.t('common.cancel')),
+                ),
+                FilledButton(
+                  onPressed: canSave
+                      ? () => Navigator.of(context).pop(true)
+                      : null,
+                  child: Text(context.txt.t('common.save')),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -1234,32 +1342,51 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     }
 
     final SideboardDeck? selectedDeck = _deckById(selectedDeckId);
-    final GameRecord newRecord = GameRecord(
-      id: now.microsecondsSinceEpoch.toString(),
-      title:
-          '${widget.tcg == SupportedTcg.mtg ? 'MTG Game' : 'Game'} ${_records.length + 1}',
-      createdAt: selectedDate,
-      gameStage: 'G1',
-      notes: '',
-      lifePointHistory: const <String>[],
-      tcgKey: widget.tcg.storageKey,
-      deckId: selectedDeck?.id ?? '',
-      deckName: selectedDeck?.name ?? customDeckName,
-      playerOneName: 'Player 1',
-      playerTwoName: opponentText.isNotEmpty ? opponentText : 'Player 2',
-      playerCount: 2,
-      matchId: matchId,
-      matchName: matchNameText.isNotEmpty ? matchNameText : defaultMatchName,
-      opponentName: opponentText,
-      opponentDeckId: '',
-      opponentDeckName: '',
-      matchTag: '',
-      matchResult: selectedResult,
-      matchDate: selectedDate.toIso8601String(),
+    final SideboardDeck? selectedOpponentDeck = _deckById(
+      selectedOpponentDeckId,
     );
+    final String effectiveMatchName = matchNameText.isNotEmpty
+        ? matchNameText
+        : defaultMatchName;
+    final String dateIso = selectedDate.toIso8601String();
+    final String gamePrefix = widget.tcg == SupportedTcg.mtg
+        ? 'MTG Game'
+        : 'Game';
+
+    final List<GameRecord> newRecords = <GameRecord>[];
+    for (int i = 0; i < 3; i++) {
+      final String result = gameResults[i];
+      if (result.isEmpty) {
+        continue;
+      }
+      newRecords.add(
+        GameRecord(
+          id: '${now.microsecondsSinceEpoch}_g${i + 1}',
+          title: '$gamePrefix ${_records.length + newRecords.length + 1}',
+          createdAt: selectedDate.add(Duration(seconds: i)),
+          gameStage: gameStageLabels[i],
+          notes: '',
+          lifePointHistory: const <String>[],
+          tcgKey: widget.tcg.storageKey,
+          deckId: selectedDeck?.id ?? '',
+          deckName: selectedDeck?.name ?? customDeckName,
+          playerOneName: 'Player 1',
+          playerTwoName: opponentText.isNotEmpty ? opponentText : 'Player 2',
+          playerCount: 2,
+          matchId: matchId,
+          matchName: effectiveMatchName,
+          opponentName: opponentText,
+          opponentDeckId: selectedOpponentDeck?.id ?? '',
+          opponentDeckName: selectedOpponentDeck?.name ?? customOpponentDeckName,
+          matchTag: '',
+          matchResult: result,
+          matchDate: dateIso,
+        ),
+      );
+    }
 
     setState(() {
-      _records.insert(0, newRecord);
+      _records.insertAll(0, newRecords);
     });
   }
 
@@ -1464,14 +1591,36 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  Text(
-                    txt.t('history.filters'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white.withValues(alpha: 0.7),
+                  InkWell(
+                    onTap: () => setState(
+                      () => _filtersExpanded = !_filtersExpanded,
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          Text(
+                            txt.t('history.filters'),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
+                          const Spacer(),
+                          Icon(
+                            _filtersExpanded
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
+                  if (_filtersExpanded) ...[
                   const SizedBox(height: 8),
                   if (deckOptions.isNotEmpty || opponentDeckOptions.isNotEmpty)
                     Row(
@@ -1632,6 +1781,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                       isDense: true,
                     ),
                   ),
+                  ],
                 ],
               ),
             ),

@@ -66,6 +66,22 @@ class _HomeScreenState extends State<HomeScreen> {
         .toList(growable: false);
   }
 
+  int _matchCountForSelectedGame() {
+    final Set<String> twoPlayerMatchIds = <String>{};
+    int multiPlayerCount = 0;
+    for (final GameRecord record in _recordsForSelectedGame()) {
+      if (record.playerCount == 2) {
+        final String matchId = record.matchId.trim().isNotEmpty
+            ? record.matchId.trim()
+            : 'legacy-${record.id}';
+        twoPlayerMatchIds.add(matchId);
+      } else {
+        multiPlayerCount++;
+      }
+    }
+    return twoPlayerMatchIds.length + multiPlayerCount;
+  }
+
   List<SideboardDeck> _decksForSelectedGame() {
     return _sideboardDecks
         .where((SideboardDeck deck) => deck.tcgKey == _selectedTcgKey)
@@ -1044,7 +1060,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final AppStrings txt = context.txt;
     final AppSettings activeSettings = _settings;
-    final int savedMatchesForGame = _recordsForSelectedGame().length;
+    final int savedMatchesForGame = _matchCountForSelectedGame();
 
     return Scaffold(
       body: Container(

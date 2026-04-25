@@ -42,6 +42,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
   String _selectedDeckFormatFilter = '';
   String _selectedDeckTagFilter = '';
   int _visibleDeckCount = _deckPageSize;
+  bool _filtersExpanded = true;
 
   @override
   void initState() {
@@ -746,14 +747,40 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                               },
                             ),
                             const SizedBox(height: 14),
-                            Text(
-                              txt.t('deckList.filters'),
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white.withValues(alpha: 0.7),
+                            InkWell(
+                              onTap: () => setState(
+                                () => _filtersExpanded = !_filtersExpanded,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      txt.t('deckList.filters'),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white.withValues(
+                                          alpha: 0.7,
+                                        ),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Icon(
+                                      _filtersExpanded
+                                          ? Icons.expand_less_rounded
+                                          : Icons.expand_more_rounded,
+                                      size: 18,
+                                      color: Colors.white.withValues(alpha: 0.7),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
+                            if (_filtersExpanded) ...[
                             const SizedBox(height: 8),
                             if (availableFormats.isNotEmpty)
                               SearchableComboField(
@@ -846,6 +873,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                                 ),
                               ],
                             ),
+                            ],
                           ],
                         ),
                       ),
