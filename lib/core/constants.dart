@@ -8,7 +8,7 @@ const Set<String> supportedTcgStorageKeys = <String>{
   'riftbound',
   'lorcana',
 };
-const String appBuildTag = 'build beta 0.2';
+const String appBuildTag = 'build beta 0.3';
 const int defaultDieSides = 6;
 const Duration diceResultVisibilityDuration = Duration(seconds: 3);
 const List<Color> appColorPalette = <Color>[

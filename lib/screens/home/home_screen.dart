@@ -1033,6 +1033,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openProfile() async {
+    // TODO: flusso login ancora da implementare
+    return;
+
     final AppStrings txt = context.txt;
     final bool allowed = await _ensurePremiumAccess(
       featureName: txt.t('account.title'),
