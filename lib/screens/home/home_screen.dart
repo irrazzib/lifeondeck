@@ -1017,12 +1017,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openProfile() async {
+    final AppStrings txt = context.txt;
+    final bool allowed = await _ensurePremiumAccess(
+      featureName: txt.t('account.title'),
+    );
+    if (!allowed || !mounted) {
+      return;
+    }
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => ProfileScreen(
-          authService: _authService,
-          syncService: _syncService,
-        ),
+        builder: (_) =>
+            ProfileScreen(authService: _authService, syncService: _syncService),
       ),
     );
   }
@@ -1194,6 +1199,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               : txt.t('account.subtitleSignedOut'),
                           backgroundColor: activeSettings.buttonColor,
                           onPressed: _openProfile,
+                          locked: !_premiumUnlocked,
                         ),
                         const Spacer(),
                       ] else ...[
@@ -1226,4 +1232,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-

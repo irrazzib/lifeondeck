@@ -1619,6 +1619,40 @@ class _DuelScreenState extends State<DuelScreen> {
                                 ComboItem(value: d.id, label: d.name),
                           )
                           .toList(growable: false),
+                      addLabel: context.txt.t('field.addNewDeck'),
+                      onAdd: (String query) async {
+                        final String? createdName = await promptText(
+                          title: context.txt.t('field.addNewDeck'),
+                          initialValue: query,
+                          hintText: context.txt.t('field.deckName'),
+                        );
+                        if (createdName == null) return null;
+                        final String trimmedName = createdName.trim();
+                        if (trimmedName.isEmpty) return null;
+                        final SideboardDeck? existing = _deckByName(trimmedName);
+                        if (existing != null) return existing.id;
+                        final SideboardDeck newDeck = SideboardDeck(
+                          id: DateTime.now().microsecondsSinceEpoch.toString(),
+                          name: trimmedName,
+                          createdAt: DateTime.now(),
+                          isFavorite: false,
+                          userNotes: '',
+                          matchups: const <SideboardMatchup>[],
+                          format: selectedFormat.trim(),
+                          tag: '',
+                          tcgKey: _isMtgRules
+                              ? SupportedTcg.mtg.storageKey
+                              : SupportedTcg.yugioh.storageKey,
+                        );
+                        setDialogState(() {
+                          _sessionAvailableDecks = <SideboardDeck>[
+                            newDeck,
+                            ..._sessionAvailableDecks,
+                          ];
+                          _createdDecksForSession.add(newDeck);
+                        });
+                        return newDeck.id;
+                      },
                       onChanged: (String value) {
                         setDialogState(() {
                           selectedDeckId = value.trim();
