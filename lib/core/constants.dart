@@ -8,7 +8,7 @@ const Set<String> supportedTcgStorageKeys = <String>{
   'riftbound',
   'lorcana',
 };
-const String appBuildTag = 'build 8286103';
+const String appBuildTag = 'build beta 0.2';
 const int defaultDieSides = 6;
 const Duration diceResultVisibilityDuration = Duration(seconds: 3);
 const List<Color> appColorPalette = <Color>[
@@ -43,7 +43,10 @@ extension AppLanguageX on AppLanguage {
   String get localeCode {
     if (this == AppLanguage.system) {
       final String systemCode = WidgetsBinding
-          .instance.platformDispatcher.locale.languageCode
+          .instance
+          .platformDispatcher
+          .locale
+          .languageCode
           .toLowerCase();
       return _storageCodes.values.firstWhere(
         (String code) => systemCode.startsWith(code),
@@ -63,10 +66,8 @@ extension AppLanguageX on AppLanguage {
     return _storageCodes.entries
         .firstWhere(
           (MapEntry<AppLanguage, String> e) => e.value == normalized,
-          orElse: () => const MapEntry<AppLanguage, String>(
-            AppLanguage.system,
-            'system',
-          ),
+          orElse: () =>
+              const MapEntry<AppLanguage, String>(AppLanguage.system, 'system'),
         )
         .key;
   }
@@ -130,13 +131,25 @@ extension SupportedTcgX on SupportedTcg {
   ({Color bgStart, Color bgEnd}) get homePresetColors {
     switch (this) {
       case SupportedTcg.yugioh:
-        return (bgStart: const Color(0xFF1A0A0A), bgEnd: const Color(0xFF3D1A1A));
+        return (
+          bgStart: const Color(0xFF1A0A0A),
+          bgEnd: const Color(0xFF3D1A1A),
+        );
       case SupportedTcg.mtg:
-        return (bgStart: const Color(0xFF0A0F1A), bgEnd: const Color(0xFF1A2B3D));
+        return (
+          bgStart: const Color(0xFF0A0F1A),
+          bgEnd: const Color(0xFF1A2B3D),
+        );
       case SupportedTcg.riftbound:
-        return (bgStart: const Color(0xFF0A1A0A), bgEnd: const Color(0xFF1A3A1A));
+        return (
+          bgStart: const Color(0xFF0A1A0A),
+          bgEnd: const Color(0xFF1A3A1A),
+        );
       case SupportedTcg.lorcana:
-        return (bgStart: const Color(0xFF150A1A), bgEnd: const Color(0xFF3D1A50));
+        return (
+          bgStart: const Color(0xFF150A1A),
+          bgEnd: const Color(0xFF3D1A50),
+        );
     }
   }
 }
