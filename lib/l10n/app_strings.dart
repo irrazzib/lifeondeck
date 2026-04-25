@@ -53,7 +53,8 @@ class AppStrings {
       'onboarding.body3':
           'Open matchup history, statistics, notes and sideboard tools anytime.',
       'onboarding.chooseGame': 'Which game do you play the most?',
-      'onboarding.chooseGameHint': 'You can change the main game in the options',
+      'onboarding.chooseGameHint':
+          'You can change the main game in the options',
       'info.matchHistory.title': 'Match History',
       'info.matchHistory.body':
           'This area groups your saved matches and keeps game details in order.',
@@ -196,6 +197,34 @@ class AppStrings {
       'account.offline': 'Offline',
       'account.syncOk': 'Up to date',
       'account.syncSection': 'Sync',
+      'common.yes': 'Yes',
+      'common.no': 'No',
+      'deckList.newDeck': 'New deck',
+      'deckList.editDeck': 'Edit deck',
+      'deckList.existingFormats': 'Existing formats',
+      'deckList.addDeck': 'Add deck',
+      'deckList.syncMatchupsTitle': 'Synchronize matchups',
+      'deckList.syncMatchupsBody':
+          'Do you want to synchronize this deck with the matchup lists of all decks with the same format?\n\nFormat: {format}',
+      'deckList.matchupSingular': '1 matchup',
+      'deckList.matchupPlural': '{count} matchups',
+      'deckList.deckSubtitleWithFormat': 'Format: {format}  •  {matchups}',
+      'mtg.setup.title': 'MTG Game Setup',
+      'mtg.setup.numPlayers': 'Number of players',
+      'mtg.setup.playersCount': '{count} Players',
+      'mtg.setup.classicSetup': 'Classic setup',
+      'mtg.setup.multiplayer': 'Multiplayer',
+      'mtg.setup.startingLp': 'Starting life points',
+      'mtg.setup.commanderStyle': 'Commander-style',
+      'mtg.setup.standardSetup': 'Standard setup',
+      'mtg.setup.counterLayout': 'Counter layout',
+      'mtg.setup.tableModeOnly': 'For 2 players only Table Mode is available.',
+      'mtg.setup.preview': 'Preview',
+      'mtg.setup.startGame': 'Start MTG Game',
+      'mtg.layout.standard': 'Standard',
+      'mtg.layout.tableMode': 'Table Mode',
+      'mtg.layout.oppositeSides': 'Opposite sides',
+      'mtg.layout.aroundTable': 'Around the table',
     },
     'it': <String, String>{
       'app.title': 'TCG Life Counter',
@@ -241,7 +270,8 @@ class AppStrings {
       'onboarding.body3':
           'Apri cronologia matchup, statistiche, note e strumenti in ogni momento.',
       'onboarding.chooseGame': 'Quale gioco giochi di più?',
-      'onboarding.chooseGameHint': 'Puoi cambiare il gioco principale nelle opzioni',
+      'onboarding.chooseGameHint':
+          'Puoi cambiare il gioco principale nelle opzioni',
       'info.matchHistory.title': 'Cronologia Match',
       'info.matchHistory.body':
           'Qui trovi i match salvati raggruppati con i dettagli dei game.',
@@ -291,7 +321,7 @@ class AppStrings {
       'history.byName': 'Per nome',
       'history.allDecks': 'Tutti i deck',
       'history.allOpponentDecks': 'Tutti i deck avversari',
-      'history.allFormats': 'Tutti i format',
+      'history.allFormats': 'Tutti i formati',
       'history.opponentSearch': 'Nome avversario',
       'history.byTag': 'Per tag',
       'history.allTags': 'Tutti i tag',
@@ -308,7 +338,7 @@ class AppStrings {
       'deckList.sortCreationDate': 'Data creazione',
       'deckList.sortFormat': 'Format',
       'deckList.favoritesOnly': 'Solo preferiti',
-      'deckList.allFormats': 'Tutti i format',
+      'deckList.allFormats': 'Tutti i formati',
       'deckList.allTags': 'Tutti i tag',
       'deckList.clearFilters': 'Azzera filtri',
       'deckList.empty': 'Nessun deck.\nTocca + per creare il primo deck.',
@@ -386,6 +416,34 @@ class AppStrings {
       'account.offline': 'Offline',
       'account.syncOk': 'Aggiornato',
       'account.syncSection': 'Sincronizzazione',
+      'common.yes': 'Sì',
+      'common.no': 'No',
+      'deckList.newDeck': 'Nuovo deck',
+      'deckList.editDeck': 'Modifica deck',
+      'deckList.existingFormats': 'Formati esistenti',
+      'deckList.addDeck': 'Aggiungi deck',
+      'deckList.syncMatchupsTitle': 'Sincronizza matchup',
+      'deckList.syncMatchupsBody':
+          'Vuoi sincronizzare questo deck con le liste matchup di tutti i deck con lo stesso formato?\n\nFormato: {format}',
+      'deckList.matchupSingular': '1 matchup',
+      'deckList.matchupPlural': '{count} matchup',
+      'deckList.deckSubtitleWithFormat': 'Formato: {format}  •  {matchups}',
+      'mtg.setup.title': 'Setup Partita MTG',
+      'mtg.setup.numPlayers': 'Numero di giocatori',
+      'mtg.setup.playersCount': '{count} Giocatori',
+      'mtg.setup.classicSetup': 'Setup classico',
+      'mtg.setup.multiplayer': 'Multiplayer',
+      'mtg.setup.startingLp': 'Life points iniziali',
+      'mtg.setup.commanderStyle': 'Stile Commander',
+      'mtg.setup.standardSetup': 'Setup standard',
+      'mtg.setup.counterLayout': 'Layout contatori',
+      'mtg.setup.tableModeOnly': 'Per 2 giocatori è disponibile solo il Table Mode.',
+      'mtg.setup.preview': 'Anteprima',
+      'mtg.setup.startGame': 'Inizia Partita MTG',
+      'mtg.layout.standard': 'Standard',
+      'mtg.layout.tableMode': 'Table Mode',
+      'mtg.layout.oppositeSides': 'Lati opposti',
+      'mtg.layout.aroundTable': 'Attorno al tavolo',
     },
   };
 
@@ -393,7 +451,9 @@ class AppStrings {
     String key, {
     Map<String, Object?> params = const <String, Object?>{},
   }) {
-    final String language = _catalog.containsKey(languageCode) ? languageCode : 'en';
+    final String language = _catalog.containsKey(languageCode)
+        ? languageCode
+        : 'en';
     final String fallback = _catalog['en']?[key] ?? key;
     String value = _catalog[language]?[key] ?? fallback;
     if (params.isEmpty) {

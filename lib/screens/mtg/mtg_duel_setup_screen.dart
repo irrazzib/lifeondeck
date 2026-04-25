@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_strings.dart';
 import '../../models/app_settings.dart';
 import 'dart:math';
 
@@ -19,21 +20,21 @@ class MtgDuelSetupResult {
 enum MtgDuelLayoutMode { standard, tableMode }
 
 extension MtgDuelLayoutModeX on MtgDuelLayoutMode {
-  String get label {
+  String label(AppStrings txt) {
     switch (this) {
       case MtgDuelLayoutMode.standard:
-        return 'Standard';
+        return txt.t('mtg.layout.standard');
       case MtgDuelLayoutMode.tableMode:
-        return 'Table Mode';
+        return txt.t('mtg.layout.tableMode');
     }
   }
 
-  String get subtitle {
+  String subtitle(AppStrings txt) {
     switch (this) {
       case MtgDuelLayoutMode.standard:
-        return 'Opposite sides';
+        return txt.t('mtg.layout.oppositeSides');
       case MtgDuelLayoutMode.tableMode:
-        return 'Around the table';
+        return txt.t('mtg.layout.aroundTable');
     }
   }
 }
@@ -828,9 +829,10 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppStrings txt = context.txt;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('MTG Game Setup'),
+        title: Text(txt.t('mtg.setup.title')),
         leading: IconButton(
           onPressed: () => Navigator.of(context).pop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
@@ -845,7 +847,7 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Number of players',
+                    txt.t('mtg.setup.numPlayers'),
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -858,8 +860,8 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
                     maxColumns: 3,
                     itemBuilder: (int count) {
                       return _buildChoiceCard(
-                        title: '$count Players',
-                        subtitle: count <= 2 ? 'Classic setup' : 'Multiplayer',
+                        title: txt.t('mtg.setup.playersCount', params: {'count': count}),
+                        subtitle: count <= 2 ? txt.t('mtg.setup.classicSetup') : txt.t('mtg.setup.multiplayer'),
                         selected: _playerCount == count,
                         onTap: () {
                           setState(() {
@@ -876,7 +878,7 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
                   ),
                   const SizedBox(height: 22),
                   Text(
-                    'Starting life points',
+                    txt.t('mtg.setup.startingLp'),
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -891,8 +893,8 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
                       return _buildChoiceCard(
                         title: '$lifePoints LP',
                         subtitle: lifePoints == 40
-                            ? 'Commander-style'
-                            : 'Standard setup',
+                            ? txt.t('mtg.setup.commanderStyle')
+                            : txt.t('mtg.setup.standardSetup'),
                         selected: _initialLifePoints == lifePoints,
                         onTap: () {
                           setState(() {
@@ -906,7 +908,7 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
                   ),
                   const SizedBox(height: 22),
                   Text(
-                    'Counter layout',
+                    txt.t('mtg.setup.counterLayout'),
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -928,8 +930,8 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
                           color: Colors.white.withValues(alpha: 0.14),
                         ),
                       ),
-                      child: const Text(
-                        'For 2 players only Table Mode is available.',
+                      child: Text(
+                        txt.t('mtg.setup.tableModeOnly'),
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
@@ -942,8 +944,8 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
                       maxColumns: 2,
                       itemBuilder: (MtgDuelLayoutMode mode) {
                         return _buildChoiceCard(
-                          title: mode.label,
-                          subtitle: mode.subtitle,
+                          title: mode.label(txt),
+                          subtitle: mode.subtitle(txt),
                           selected: _layoutMode == mode,
                           onTap: () {
                             setState(() {
@@ -957,7 +959,7 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
                     ),
                   const SizedBox(height: 12),
                   Text(
-                    'Preview',
+                    txt.t('mtg.setup.preview'),
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
@@ -981,7 +983,7 @@ class _MtgDuelSetupScreenState extends State<MtgDuelSetupScreen> {
                   backgroundColor: widget.settings.buttonColor,
                 ),
                 child: Text(
-                  'Start MTG Game',
+                  txt.t('mtg.setup.startGame'),
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,

@@ -181,7 +181,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
           return StatefulBuilder(
             builder: (BuildContext context, StateSetter setDialogState) {
               return AlertDialog(
-                title: Text(initialDeck == null ? 'New deck' : 'Edit deck'),
+                title: Text(initialDeck == null ? context.txt.t('deckList.newDeck') : context.txt.t('deckList.editDeck')),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -217,7 +217,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                       if (existingFormats.isNotEmpty) ...[
                         const SizedBox(height: 10),
                         Text(
-                          'Existing formats',
+                          context.txt.t('deckList.existingFormats'),
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.white.withValues(alpha: 0.74),
@@ -307,18 +307,18 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Synchronize matchups'),
+          title: Text(context.txt.t('deckList.syncMatchupsTitle')),
           content: Text(
-            'Do you want to synchronize this deck with the matchup lists of all decks with the same format?\n\nFormat: $format',
+            context.txt.t('deckList.syncMatchupsBody', params: {'format': format}),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('No'),
+              child: Text(context.txt.t('common.no')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Yes'),
+              child: Text(context.txt.t('common.yes')),
             ),
           ],
         );
@@ -669,14 +669,14 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("Deck's Utility"),
+          title: Text(txt.t('home.decksUtility')),
           leading: IconButton(
             onPressed: _closeWithResult,
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
           ),
           actions: [
             IconButton(
-              tooltip: 'Add deck',
+              tooltip: txt.t('deckList.addDeck'),
               onPressed: _addDeck,
               icon: const Icon(Icons.add_rounded),
             ),
@@ -912,12 +912,12 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                               final SideboardDeck deck = sortedDecks[index];
                               final int matchupCount = deck.matchups.length;
                               final String matchupLabel = matchupCount == 1
-                                  ? '1 matchup'
-                                  : '$matchupCount matchups';
+                                  ? txt.t('deckList.matchupSingular')
+                                  : txt.t('deckList.matchupPlural', params: {'count': matchupCount});
                               final String trimmedFormat = deck.format.trim();
                               final String subtitleText = trimmedFormat.isEmpty
                                   ? matchupLabel
-                                  : 'Format: $trimmedFormat  •  $matchupLabel';
+                                  : txt.t('deckList.deckSubtitleWithFormat', params: {'format': trimmedFormat, 'matchups': matchupLabel});
                               return Card(
                                 margin: const EdgeInsets.only(bottom: 10),
                                 color: const Color(0xFF1E1B1B),
