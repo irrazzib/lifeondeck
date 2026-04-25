@@ -23,12 +23,12 @@ class DefaultFirebaseOptions {
   // ── Web ──────────────────────────────────────────────────────────────────────
   // Replace all values after running: flutterfire configure
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'TODO_WEB_API_KEY',
-    appId: 'TODO_WEB_APP_ID',
-    messagingSenderId: 'TODO_SENDER_ID',
-    projectId: 'TODO_PROJECT_ID',
-    authDomain: 'TODO_PROJECT_ID.firebaseapp.com',
-    storageBucket: 'TODO_PROJECT_ID.firebasestorage.app',
+    apiKey: 'AIzaSyB4tvQJAKvJ3IigQuaF7Lzu4d1bqb0ZocE',
+    appId: '1:986619117987:web:442769987713ed487fda16',
+    messagingSenderId: '986619117987',
+    projectId: 'lifeondeck-973be',
+    authDomain: 'lifeondeck-973be.firebaseapp.com',
+    storageBucket: 'lifeondeck-973be.firebasestorage.app',
   );
 
   // ── Android ──────────────────────────────────────────────────────────────────
