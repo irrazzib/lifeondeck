@@ -213,6 +213,10 @@ class _TwoPlayerMatchDetailScreenState
     if (selectedDeckId.isNotEmpty && _deckById(selectedDeckId) == null) {
       selectedDeckId = '';
     }
+    String customDeckName = (selectedDeckId.isEmpty &&
+            _metadata.deckName.trim().isNotEmpty)
+        ? _metadata.deckName.trim()
+        : '';
     DateTime selectedMatchDate = _metadata.matchDate ?? DateTime.now();
     String selectedFormat = _metadata.format.trim();
     String selectedOpponentDeckId = _metadata.opponentDeckId.trim();
@@ -221,6 +225,10 @@ class _TwoPlayerMatchDetailScreenState
       selectedOpponentDeckId =
           _deckByName(_metadata.opponentDeckName)?.id ?? '';
     }
+    String customOpponentDeckName = (selectedOpponentDeckId.isEmpty &&
+            _metadata.opponentDeckName.trim().isNotEmpty)
+        ? _metadata.opponentDeckName.trim()
+        : '';
 
     List<String> formatOptions() {
       final Set<String> formats = <String>{};
@@ -368,7 +376,14 @@ class _TwoPlayerMatchDetailScreenState
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      initialValue: selectedDeckId,
+                      key: ValueKey<String>(
+                        'deck_${selectedDeckId}_$customDeckName',
+                      ),
+                      initialValue: selectedDeckId.isNotEmpty
+                          ? selectedDeckId
+                          : (customDeckName.isNotEmpty
+                                ? '__custom_deck__'
+                                : null),
                       decoration: InputDecoration(
                         labelText: context.txt.t('field.deck'),
                         border: const OutlineInputBorder(),
@@ -388,19 +403,59 @@ class _TwoPlayerMatchDetailScreenState
                             ),
                           );
                         }),
+                        if (customDeckName.isNotEmpty)
+                          DropdownMenuItem<String>(
+                            value: '__custom_deck__',
+                            child: Text(
+                              customDeckName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        DropdownMenuItem<String>(
+                          value: '__add_deck__',
+                          child: Text(context.txt.t('field.addNewDeck')),
+                        ),
                       ],
-                      onChanged: (String? nextValue) {
+                      onChanged: (String? nextValue) async {
+                        if (nextValue == '__add_deck__') {
+                          final String? created = await _promptText(
+                            title: context.txt.t('field.addNewDeck'),
+                            initialValue: customDeckName,
+                            hintText: context.txt.t('field.deckName'),
+                          );
+                          if (created == null) {
+                            return;
+                          }
+                          final String trimmed = created.trim();
+                          if (trimmed.isEmpty) {
+                            return;
+                          }
+                          setDialogState(() {
+                            selectedDeckId = '';
+                            customDeckName = trimmed;
+                          });
+                          return;
+                        }
+                        if (nextValue == '__custom_deck__') {
+                          return;
+                        }
                         setDialogState(() {
                           selectedDeckId = (nextValue ?? '').trim();
+                          customDeckName = '';
                           normalizeSelectedDeck();
                         });
                       },
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      initialValue: selectedOpponentDeckId.isEmpty
-                          ? null
-                          : selectedOpponentDeckId,
+                      key: ValueKey<String>(
+                        'opp_deck_${selectedOpponentDeckId}_$customOpponentDeckName',
+                      ),
+                      initialValue: selectedOpponentDeckId.isNotEmpty
+                          ? selectedOpponentDeckId
+                          : (customOpponentDeckName.isNotEmpty
+                                ? '__custom_opp_deck__'
+                                : null),
                       decoration: InputDecoration(
                         labelText: context.txt.t('field.opponentDeck'),
                         border: const OutlineInputBorder(),
@@ -420,10 +475,45 @@ class _TwoPlayerMatchDetailScreenState
                             ),
                           );
                         }),
+                        if (customOpponentDeckName.isNotEmpty)
+                          DropdownMenuItem<String>(
+                            value: '__custom_opp_deck__',
+                            child: Text(
+                              customOpponentDeckName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        DropdownMenuItem<String>(
+                          value: '__add_deck__',
+                          child: Text(context.txt.t('field.addNewDeck')),
+                        ),
                       ],
-                      onChanged: (String? nextValue) {
+                      onChanged: (String? nextValue) async {
+                        if (nextValue == '__add_deck__') {
+                          final String? created = await _promptText(
+                            title: context.txt.t('field.addNewDeck'),
+                            initialValue: customOpponentDeckName,
+                            hintText: context.txt.t('field.deckName'),
+                          );
+                          if (created == null) {
+                            return;
+                          }
+                          final String trimmed = created.trim();
+                          if (trimmed.isEmpty) {
+                            return;
+                          }
+                          setDialogState(() {
+                            selectedOpponentDeckId = '';
+                            customOpponentDeckName = trimmed;
+                          });
+                          return;
+                        }
+                        if (nextValue == '__custom_opp_deck__') {
+                          return;
+                        }
                         setDialogState(() {
                           selectedOpponentDeckId = (nextValue ?? '').trim();
+                          customOpponentDeckName = '';
                           normalizeSelectedOpponentDeck();
                         });
                       },
@@ -529,10 +619,10 @@ class _TwoPlayerMatchDetailScreenState
         name: matchNameController.text.trim(),
         opponentName: opponentController.text.trim(),
         deckId: selectedDeck?.id ?? '',
-        deckName: selectedDeck?.name ?? '',
+        deckName: selectedDeck?.name ?? customDeckName,
         format: selectedFormat,
         opponentDeckId: selectedOpponentDeck?.id ?? '',
-        opponentDeckName: selectedOpponentDeck?.name ?? '',
+        opponentDeckName: selectedOpponentDeck?.name ?? customOpponentDeckName,
         tag: tagController.text.trim(),
         matchDate: selectedMatchDate,
       ),

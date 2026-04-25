@@ -600,6 +600,10 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       text: record.opponentName,
     );
     String selectedDeckId = _resolvedDeckId(record);
+    String customDeckName = (selectedDeckId.isEmpty &&
+            _resolvedDeckName(record).trim().isNotEmpty)
+        ? _resolvedDeckName(record).trim()
+        : '';
     String stage = supportedGameStages.contains(record.gameStage)
         ? record.gameStage
         : 'G1';
@@ -626,7 +630,14 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      initialValue: selectedDeckId,
+                      key: ValueKey<String>(
+                        'deck_${selectedDeckId}_$customDeckName',
+                      ),
+                      initialValue: selectedDeckId.isNotEmpty
+                          ? selectedDeckId
+                          : (customDeckName.isNotEmpty
+                                ? '__custom_deck__'
+                                : null),
                       decoration: const InputDecoration(
                         labelText: 'Deck',
                         border: OutlineInputBorder(),
@@ -646,10 +657,45 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                             ),
                           );
                         }),
+                        if (customDeckName.isNotEmpty)
+                          DropdownMenuItem<String>(
+                            value: '__custom_deck__',
+                            child: Text(
+                              customDeckName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        DropdownMenuItem<String>(
+                          value: '__add_deck__',
+                          child: Text(context.txt.t('field.addNewDeck')),
+                        ),
                       ],
-                      onChanged: (String? nextValue) {
+                      onChanged: (String? nextValue) async {
+                        if (nextValue == '__add_deck__') {
+                          final String? created = await _promptText(
+                            title: context.txt.t('field.addNewDeck'),
+                            initialValue: customDeckName,
+                            hintText: context.txt.t('field.deckName'),
+                          );
+                          if (created == null) {
+                            return;
+                          }
+                          final String trimmed = created.trim();
+                          if (trimmed.isEmpty) {
+                            return;
+                          }
+                          setDialogState(() {
+                            selectedDeckId = '';
+                            customDeckName = trimmed;
+                          });
+                          return;
+                        }
+                        if (nextValue == '__custom_deck__') {
+                          return;
+                        }
                         setDialogState(() {
                           selectedDeckId = (nextValue ?? '').trim();
+                          customDeckName = '';
                         });
                       },
                     ),
@@ -737,7 +783,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
             ? record.playerTwoName
             : opponentController.text.trim(),
         deckId: selectedDeck?.id ?? '',
-        deckName: selectedDeck?.name ?? '',
+        deckName: selectedDeck?.name ?? customDeckName,
         gameStage: stage,
         matchResult: result,
       ),
@@ -1019,32 +1065,250 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     });
   }
 
-  void _createManualRecord() {
+  Future<void> _createManualRecord() async {
     final DateTime now = DateTime.now();
     final Set<String> twoPlayerMatchIds = _records
         .where((GameRecord record) => record.playerCount == 2)
         .map((GameRecord record) => _effectiveMatchId(record))
         .toSet();
     final String matchId = 'manual-match-${now.microsecondsSinceEpoch}';
-    final String matchName = _defaultMatchName(twoPlayerMatchIds.length + 1);
+    final String defaultMatchName = _defaultMatchName(
+      twoPlayerMatchIds.length + 1,
+    );
+
+    final TextEditingController matchNameController = TextEditingController(
+      text: defaultMatchName,
+    );
+    final TextEditingController opponentController = TextEditingController();
+    DateTime selectedDate = now;
+    String selectedDeckId = '';
+    String customDeckName = '';
+    String selectedResult = '';
+
+    final bool? shouldCreate = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(context.txt.t('history.addMatch')),
+          content: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) {
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    TextField(
+                      controller: matchNameController,
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.matchName'),
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    InkWell(
+                      onTap: () async {
+                        final DateTime? pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 1),
+                          ),
+                        );
+                        if (pickedDate == null) {
+                          return;
+                        }
+                        final TimeOfDay? pickedTime = await showTimePicker(
+                          context: context, // ignore: use_build_context_synchronously
+                          initialTime: TimeOfDay.fromDateTime(selectedDate),
+                        );
+                        setDialogState(() {
+                          selectedDate = DateTime(
+                            pickedDate.year,
+                            pickedDate.month,
+                            pickedDate.day,
+                            pickedTime?.hour ?? selectedDate.hour,
+                            pickedTime?.minute ?? selectedDate.minute,
+                          );
+                        });
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: context.txt.t('field.date'),
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                          suffixIcon: const Icon(
+                            Icons.calendar_today_rounded,
+                            size: 18,
+                          ),
+                        ),
+                        child: Text(
+                          formatDateTime(selectedDate, context),
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: opponentController,
+                      decoration: const InputDecoration(
+                        labelText: 'Opponent',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      key: ValueKey<String>(
+                        'deck_${selectedDeckId}_$customDeckName',
+                      ),
+                      initialValue: selectedDeckId.isNotEmpty
+                          ? selectedDeckId
+                          : (customDeckName.isNotEmpty
+                                ? '__custom_deck__'
+                                : null),
+                      decoration: InputDecoration(
+                        labelText: context.txt.t('field.deck'),
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: <DropdownMenuItem<String>>[
+                        DropdownMenuItem<String>(
+                          value: '',
+                          child: Text(context.txt.t('field.noDeck')),
+                        ),
+                        ...widget.decks.map((SideboardDeck deck) {
+                          return DropdownMenuItem<String>(
+                            value: deck.id,
+                            child: Text(
+                              deck.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }),
+                        if (customDeckName.isNotEmpty)
+                          DropdownMenuItem<String>(
+                            value: '__custom_deck__',
+                            child: Text(
+                              customDeckName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        DropdownMenuItem<String>(
+                          value: '__add_deck__',
+                          child: Text(context.txt.t('field.addNewDeck')),
+                        ),
+                      ],
+                      onChanged: (String? nextValue) async {
+                        if (nextValue == '__add_deck__') {
+                          final String? created = await _promptText(
+                            title: context.txt.t('field.addNewDeck'),
+                            initialValue: customDeckName,
+                            hintText: context.txt.t('field.deckName'),
+                          );
+                          if (created == null) {
+                            return;
+                          }
+                          final String trimmed = created.trim();
+                          if (trimmed.isEmpty) {
+                            return;
+                          }
+                          setDialogState(() {
+                            selectedDeckId = '';
+                            customDeckName = trimmed;
+                          });
+                          return;
+                        }
+                        if (nextValue == '__custom_deck__') {
+                          return;
+                        }
+                        setDialogState(() {
+                          selectedDeckId = (nextValue ?? '').trim();
+                          customDeckName = '';
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedResult.isEmpty
+                          ? null
+                          : selectedResult,
+                      decoration: const InputDecoration(
+                        labelText: 'Result',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: <DropdownMenuItem<String>>[
+                        const DropdownMenuItem<String>(
+                          value: '',
+                          child: Text('No result'),
+                        ),
+                        ...supportedMatchResults.map((String item) {
+                          return DropdownMenuItem<String>(
+                            value: item,
+                            child: Text(item),
+                          );
+                        }),
+                      ],
+                      onChanged: (String? nextValue) {
+                        setDialogState(() {
+                          selectedResult = (nextValue ?? '').trim();
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.txt.t('common.cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(context.txt.t('common.save')),
+            ),
+          ],
+        );
+      },
+    );
+
+    final String matchNameText = matchNameController.text.trim();
+    final String opponentText = opponentController.text.trim();
+    disposeTextControllersLater(<TextEditingController>[
+      matchNameController,
+      opponentController,
+    ]);
+
+    if (shouldCreate != true || !mounted) {
+      return;
+    }
+
+    final SideboardDeck? selectedDeck = _deckById(selectedDeckId);
     final GameRecord newRecord = GameRecord(
       id: now.microsecondsSinceEpoch.toString(),
       title:
           '${widget.tcg == SupportedTcg.mtg ? 'MTG Game' : 'Game'} ${_records.length + 1}',
-      createdAt: now,
+      createdAt: selectedDate,
       gameStage: 'G1',
       notes: '',
       lifePointHistory: const <String>[],
       tcgKey: widget.tcg.storageKey,
-      deckId: '',
+      deckId: selectedDeck?.id ?? '',
+      deckName: selectedDeck?.name ?? customDeckName,
       playerOneName: 'Player 1',
-      playerTwoName: 'Player 2',
+      playerTwoName: opponentText.isNotEmpty ? opponentText : 'Player 2',
       playerCount: 2,
       matchId: matchId,
-      matchName: matchName,
+      matchName: matchNameText.isNotEmpty ? matchNameText : defaultMatchName,
+      opponentName: opponentText,
       opponentDeckId: '',
       opponentDeckName: '',
       matchTag: '',
+      matchResult: selectedResult,
+      matchDate: selectedDate.toIso8601String(),
     );
 
     setState(() {
