@@ -397,13 +397,22 @@ class _TwoPlayerMatchDetailScreenState
                       label: context.txt.t('field.opponent'),
                       value: _metadata.opponentName,
                     ),
-                    _buildSummaryRow(label: context.txt.t('field.deck'), value: _metadata.deckName),
+                    _buildSummaryRow(
+                      label: context.txt.t('field.deck'),
+                      value: _metadata.deckName,
+                    ),
                     _buildSummaryRow(
                       label: context.txt.t('field.opponentDeck'),
                       value: _metadata.opponentDeckName,
                     ),
-                    _buildSummaryRow(label: context.txt.t('field.format'), value: _metadata.format),
-                    _buildSummaryRow(label: context.txt.t('field.tag'), value: _metadata.tag),
+                    _buildSummaryRow(
+                      label: context.txt.t('field.format'),
+                      value: _metadata.format,
+                    ),
+                    _buildSummaryRow(
+                      label: context.txt.t('field.tag'),
+                      value: _metadata.tag,
+                    ),
                     if (_metadata.matchDate != null)
                       _buildSummaryRow(
                         label: context.txt.t('field.date'),
@@ -411,7 +420,7 @@ class _TwoPlayerMatchDetailScreenState
                       ),
                     const SizedBox(height: 10),
                     Text(
-                      'Edit match changes metadata only. Match result is calculated from the game results below.',
+                      '${context.txt.t('info.matchDetail.message')}',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.62),
                         fontSize: 12,
@@ -437,7 +446,7 @@ class _TwoPlayerMatchDetailScreenState
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 child: Center(
                   child: Text(
-                    'No games in this match.',
+                    '${context.txt.t('info.matchDetail.noGames')}',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.74),
                     ),
@@ -540,7 +549,9 @@ class _TwoPlayerMatchDetailScreenState
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          game.notes.trim().isEmpty ? 'No notes' : game.notes,
+                          game.notes.trim().isEmpty
+                              ? context.txt.t('common.noNotes')
+                              : game.notes,
                           maxLines: 4,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -580,7 +591,9 @@ class _TwoPlayerMatchDetailScreenState
                                       Icons.format_list_bulleted_rounded,
                                       size: 16,
                                     ),
-                                    label: Text(context.txt.t('game.lpHistory')),
+                                    label: Text(
+                                      context.txt.t('game.lpHistory'),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -604,4 +617,3 @@ class _TwoPlayerMatchDetailScreenState
     );
   }
 }
-

@@ -126,8 +126,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
 
   String _defaultMatchName(int number) {
     final String prefix = widget.tcg == SupportedTcg.mtg
-        ? 'MTG Match'
-        : 'Match';
+        ? context.txt.t('history.mtgMatchPrefix')
+        : context.txt.t('history.matchPrefix');
     return '$prefix $number';
   }
 
@@ -694,7 +694,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Export History (.txt)'),
+          title: Text(context.txt.t('history.exportDialogTitle')),
           content: SizedBox(
             width: double.maxFinite,
             child: SingleChildScrollView(
@@ -716,18 +716,18 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                   return;
                 }
                 ScaffoldMessenger.of(this.context).showSnackBar(
-                  const SnackBar(
+                  SnackBar(
                     content: Text(
-                      'History text copied. Save it as a .txt file.',
+                      this.context.txt.t('history.exportCopied'),
                     ),
                   ),
                 );
               },
-              child: const Text('Copy'),
+              child: Text(context.txt.t('common.copy')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
+              child: Text(context.txt.t('common.close')),
             ),
           ],
         );
@@ -741,15 +741,15 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Import History (.txt)'),
+          title: Text(context.txt.t('history.importDialogTitle')),
           content: SizedBox(
             width: double.maxFinite,
             child: TextField(
               controller: textController,
               maxLines: 14,
               minLines: 8,
-              decoration: const InputDecoration(
-                hintText: 'Paste exported .txt content here',
+              decoration: InputDecoration(
+                hintText: context.txt.t('history.importHint'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -761,7 +761,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Import'),
+              child: Text(context.txt.t('common.import')),
             ),
           ],
         );
@@ -781,7 +781,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
           return;
         }
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No valid duel records found.')),
+          SnackBar(content: Text(context.txt.t('history.noValidRecords'))),
         );
         return;
       }
@@ -803,7 +803,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${imported.length} duel(s) imported.')),
+        SnackBar(content: Text(context.txt.t('history.importedCount', params: <String, Object?>{'count': imported.length}))),
       );
     } on FormatException catch (error) {
       if (!mounted) {
@@ -814,7 +814,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
         SnackBar(
           content: Text(
             message.isEmpty
-                ? 'Import failed. Invalid .txt history format.'
+                ? context.txt.t('history.importFailed')
                 : message,
           ),
         ),
@@ -824,8 +824,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Import failed. Invalid .txt history format.'),
+        SnackBar(
+          content: Text(context.txt.t('history.importFailed')),
         ),
       );
     }
@@ -834,9 +834,9 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   Future<void> _renameRecord(GameRecord record) async {
     final String? result = await showTextPromptDialog(
       context,
-      title: 'Rename game',
+      title: context.txt.t('history.renameGame'),
       initialValue: record.title,
-      hintText: 'Game name',
+      hintText: context.txt.t('history.gameNameHint'),
     );
     if (result == null) {
       return;
@@ -859,8 +859,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Delete game'),
-          content: Text('Delete "${record.title}" from history?'),
+          title: Text(context.txt.t('history.deleteGame')),
+          content: Text(context.txt.t('history.deleteGameConfirm', params: <String, Object?>{'title': record.title})),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -868,7 +868,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Delete'),
+              child: Text(context.txt.t('common.delete')),
             ),
           ],
         );
@@ -918,7 +918,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
           children: <Widget>[
             const SizedBox(height: 14),
             Text(
-              'Games',
+              context.txt.t('history.games'),
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -945,8 +945,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
-                      fixedItems: const <ComboItem>[
-                        ComboItem(value: '', label: 'No result'),
+                      fixedItems: <ComboItem>[
+                        ComboItem(value: '', label: context.txt.t('history.gameResultNone')),
                       ],
                       items: supportedMatchResults
                           .map((String s) => ComboItem(value: s, label: s))
@@ -974,8 +974,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     final bool anyResult = gameResults.any((String r) => r.isNotEmpty);
     if (!anyResult) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('At least one game result is required.'),
+        SnackBar(
+          content: Text(context.txt.t('history.atLeastOneResult')),
         ),
       );
       return;
@@ -987,8 +987,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
         : defaultMatchName;
     final String opponentText = result.opponentName;
     final String gamePrefix = widget.tcg == SupportedTcg.mtg
-        ? 'MTG Game'
-        : 'Game';
+        ? context.txt.t('history.mtgGamePrefix')
+        : context.txt.t('history.gamePrefix');
 
     final List<GameRecord> newRecords = <GameRecord>[];
     for (int i = 0; i < 3; i++) {
@@ -1034,7 +1034,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('${record.title} - LP History'),
+          title: Text('${record.title} - ${context.txt.t('game.lpHistory')}'),
           content: SizedBox(
             width: double.maxFinite,
             child: hasHistory
@@ -1043,12 +1043,12 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                     playerCount: record.playerCount,
                     dividerColor: Colors.white.withValues(alpha: 0.14),
                   )
-                : const Text('No life point history saved for this game yet.'),
+                : Text(context.txt.t('history.noLpHistory')),
           ),
           actions: [
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
+              child: Text(context.txt.t('common.close')),
             ),
           ],
         );
@@ -1697,7 +1697,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  'Opponent: $opponentLabel',
+                                  '${context.txt.t('field.opponent')}: $opponentLabel',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -1724,7 +1724,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                                         ? null
                                         : selectedResult,
                                     hint: Text(
-                                      'Result',
+                                      context.txt.t('history.resultHint'),
                                       style: TextStyle(
                                         color: _matchResultTextColor(''),
                                       ),
@@ -1769,8 +1769,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                           const SizedBox(height: 8),
                           SearchableComboField(
                             value: selectedDeckId,
-                            decoration: const InputDecoration(
-                              labelText: 'Deck',
+                            decoration: InputDecoration(
+                              labelText: context.txt.t('field.deck'),
                               border: OutlineInputBorder(),
                               isDense: true,
                             ),
@@ -1801,7 +1801,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                           const SizedBox(height: 6),
                           Text(
                             record.notes.trim().isEmpty
-                                ? 'No notes'
+                                ? context.txt.t('common.noNotes')
                                 : record.notes,
                             maxLines: 4,
                             overflow: TextOverflow.ellipsis,
@@ -1857,7 +1857,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                                 ),
                               ),
                               IconButton(
-                                tooltip: 'Delete duel',
+                                tooltip: context.txt.t('history.deleteDuelTooltip'),
                                 onPressed: () => _deleteRecord(record),
                                 icon: const Icon(Icons.delete_outline_rounded),
                                 color: const Color(0xFFFF8A8A),
