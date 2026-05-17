@@ -57,7 +57,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   late final ScrollController _matchListController;
   late final TextEditingController _opponentNameFilterController;
   int _visibleMatchCount = _matchPageSize;
-  bool _filtersExpanded = true;
+  bool _filtersExpanded = false;
 
   @override
   void initState() {
@@ -1212,6 +1212,54 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  InkWell(
+                    onTap: () => setState(
+                      () => _filtersExpanded = !_filtersExpanded,
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.tune_rounded,
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            txt.t('history.sortFilter'),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white.withValues(alpha: 0.85),
+                            ),
+                          ),
+                          if (_hasActiveMatchFilters) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFFAA33),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ],
+                          const Spacer(),
+                          Icon(
+                            _filtersExpanded
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_filtersExpanded) ...[
+                  const SizedBox(height: 12),
                   Text(
                     txt.t('history.sortBy'),
                     style: TextStyle(
@@ -1262,36 +1310,14 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  InkWell(
-                    onTap: () => setState(
-                      () => _filtersExpanded = !_filtersExpanded,
-                    ),
-                    borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        children: [
-                          Text(
-                            txt.t('history.filters'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white.withValues(alpha: 0.7),
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(
-                            _filtersExpanded
-                                ? Icons.expand_less_rounded
-                                : Icons.expand_more_rounded,
-                            size: 18,
-                            color: Colors.white.withValues(alpha: 0.7),
-                          ),
-                        ],
-                      ),
+                  Text(
+                    txt.t('history.filters'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white.withValues(alpha: 0.7),
                     ),
                   ),
-                  if (_filtersExpanded) ...[
                   const SizedBox(height: 8),
                   if (deckOptions.isNotEmpty || opponentDeckOptions.isNotEmpty)
                     Row(

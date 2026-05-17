@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants.dart';
 import '../../l10n/app_strings.dart';
+import '../../widgets/deck_form_dialog.dart';
 import '../../widgets/searchable_combo_field.dart';
 import '../../models/app_settings.dart';
 import '../../models/game_record.dart';
@@ -34,6 +35,7 @@ class SideboardDeckListScreen extends StatefulWidget {
 
 class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
   static const int _deckPageSize = 5;
+  static const String _noFormatFilterValue = '__no_format__';
 
   late List<SideboardDeck> _decks;
   late List<GameRecord> _records;
@@ -41,14 +43,23 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
   bool _showFavoritesOnly = false;
   String _selectedDeckFormatFilter = '';
   String _selectedDeckTagFilter = '';
+  String _deckNameFilter = '';
+  late final TextEditingController _deckNameFilterController;
   int _visibleDeckCount = _deckPageSize;
-  bool _filtersExpanded = true;
+  bool _filtersExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _decks = List<SideboardDeck>.from(widget.decks);
     _records = List<GameRecord>.from(widget.records);
+    _deckNameFilterController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _deckNameFilterController.dispose();
+    super.dispose();
   }
 
   void _closeWithResult() {
@@ -79,7 +90,8 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
   bool get _hasActiveDeckFilters {
     return _showFavoritesOnly ||
         _selectedDeckFormatFilter.isNotEmpty ||
-        _selectedDeckTagFilter.isNotEmpty;
+        _selectedDeckTagFilter.isNotEmpty ||
+        _deckNameFilter.trim().isNotEmpty;
   }
 
   void _clearDeckFilters() {
@@ -87,6 +99,8 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
       _showFavoritesOnly = false;
       _selectedDeckFormatFilter = '';
       _selectedDeckTagFilter = '';
+      _deckNameFilter = '';
+      _deckNameFilterController.clear();
     });
   }
 
@@ -94,6 +108,8 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
     required String selectedFormatFilter,
     required String selectedTagFilter,
   }) {
+    final String nameQuery = _deckNameFilter.trim().toLowerCase();
+    final bool filterNoFormat = selectedFormatFilter == _noFormatFilterValue;
     final List<SideboardDeck> sorted = _decks
         .where((SideboardDeck deck) {
           if (deck.deletedAt != null) {
@@ -102,7 +118,11 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
           if (_showFavoritesOnly && !deck.isFavorite) {
             return false;
           }
-          if (selectedFormatFilter.isNotEmpty &&
+          if (filterNoFormat) {
+            if (deck.format.trim().isNotEmpty) {
+              return false;
+            }
+          } else if (selectedFormatFilter.isNotEmpty &&
               deck.format.trim().toLowerCase() !=
                   selectedFormatFilter.trim().toLowerCase()) {
             return false;
@@ -110,6 +130,10 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
           if (selectedTagFilter.isNotEmpty &&
               deck.tag.trim().toLowerCase() !=
                   selectedTagFilter.trim().toLowerCase()) {
+            return false;
+          }
+          if (nameQuery.isNotEmpty &&
+              !deck.name.toLowerCase().contains(nameQuery)) {
             return false;
           }
           return true;
@@ -145,165 +169,36 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
   }
 
   List<String> _existingDeckFormats() {
-    final Set<String> uniqueFormats = <String>{};
+    final Map<String, String> uniqueByKey = <String, String>{};
+    void addFormat(String raw) {
+      final String trimmed = raw.trim();
+      if (trimmed.isEmpty) return;
+      final String key = trimmed.toLowerCase();
+      uniqueByKey.putIfAbsent(key, () => trimmed);
+    }
+
     for (final SideboardDeck deck in _decks) {
-      final String format = deck.format.trim();
-      if (format.isEmpty) {
-        continue;
-      }
-      uniqueFormats.add(format);
+      addFormat(deck.format);
     }
     for (final GameRecord record in _records) {
-      final String format = record.matchFormat.trim();
-      if (format.isEmpty) {
-        continue;
-      }
-      uniqueFormats.add(format);
+      addFormat(record.matchFormat);
     }
-    final List<String> sorted = uniqueFormats.toList(growable: false);
+    final List<String> sorted = uniqueByKey.values.toList(growable: false);
     sorted.sort((String a, String b) {
       return a.toLowerCase().compareTo(b.toLowerCase());
     });
     return sorted;
   }
 
-  Future<({String name, String format})?> _promptNewDeckData({
-    SideboardDeck? initialDeck,
-  }) async {
-    final TextEditingController nameController = TextEditingController();
-    final TextEditingController formatController = TextEditingController();
-    String? nameErrorText;
-    if (initialDeck != null) {
-      nameController.text = initialDeck.name;
-      formatController.text = initialDeck.format;
-    }
-    final List<String> existingFormats = _existingDeckFormats();
-    try {
-      final bool? shouldCreate = await showDialog<bool>(
-        context: context,
-        builder: (BuildContext context) {
-          return StatefulBuilder(
-            builder: (BuildContext context, StateSetter setDialogState) {
-              return AlertDialog(
-                title: Text(initialDeck == null ? context.txt.t('deckList.newDeck') : context.txt.t('deckList.editDeck')),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        onChanged: (_) {
-                          if (nameErrorText == null) {
-                            return;
-                          }
-                          setDialogState(() {
-                            nameErrorText = null;
-                          });
-                        },
-                        decoration: InputDecoration(
-                          labelText: context.txt.t('field.deckName'),
-                          errorText: nameErrorText,
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: formatController,
-                        decoration: InputDecoration(
-                          labelText: context.txt.t('field.format'),
-                          hintText: 'Modern, Commander, Edison...',
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                      if (existingFormats.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          context.txt.t('deckList.existingFormats'),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withValues(alpha: 0.74),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            for (final String format in existingFormats)
-                              ChoiceChip(
-                                label: Text(format),
-                                selected:
-                                    formatController.text
-                                        .trim()
-                                        .toLowerCase() ==
-                                    format.toLowerCase(),
-                                onSelected: (_) {
-                                  formatController.text = format;
-                                  setDialogState(() {});
-                                },
-                              ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    child: Text(context.txt.t('common.cancel')),
-                  ),
-                  FilledButton(
-                    onPressed: () {
-                      final String candidateName = nameController.text.trim();
-                      if (candidateName.isEmpty) {
-                        setDialogState(() {
-                          nameErrorText = 'Deck name is required.';
-                        });
-                        return;
-                      }
-                      if (hasDeckNameConflict(
-                        _decks,
-                        candidateName,
-                        excludedDeckId: initialDeck?.id ?? '',
-                      )) {
-                        setDialogState(() {
-                          nameErrorText =
-                              'A deck with this name already exists.';
-                        });
-                        return;
-                      }
-                      Navigator.of(context).pop(true);
-                    },
-                    child: Text(initialDeck == null ? context.txt.t('common.create') : context.txt.t('common.save')),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
-
-      if (shouldCreate != true) {
-        return null;
-      }
-
-      final String name = nameController.text.trim();
-      final String format = formatController.text.trim();
-      if (name.isEmpty) {
-        return null;
-      }
-
-      return (name: name, format: format);
-    } finally {
-      disposeTextControllersLater(<TextEditingController>[
-        nameController,
-        formatController,
-      ]);
-    }
+  Future<DeckFormResult?> _promptNewDeckData({SideboardDeck? initialDeck}) {
+    return showDeckFormDialog(
+      context,
+      existingDecks: _decks
+          .where((SideboardDeck d) => d.deletedAt == null)
+          .toList(growable: false),
+      existingFormats: _existingDeckFormats(),
+      editingDeck: initialDeck,
+    );
   }
 
   Future<bool> _confirmAutoMatchupForFormat(String format) async {
@@ -689,11 +584,24 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
     final AppStrings txt = context.txt;
     final List<String> availableFormats = _existingDeckFormats();
     final List<String> availableTags = _existingDeckTags();
+    final bool hasDeckWithoutFormat = _decks.any(
+      (SideboardDeck d) => d.deletedAt == null && d.format.trim().isEmpty,
+    );
+    String? matchedFormat;
+    if (_selectedDeckFormatFilter.isNotEmpty) {
+      final String key = _selectedDeckFormatFilter.toLowerCase();
+      for (final String f in availableFormats) {
+        if (f.toLowerCase() == key) {
+          matchedFormat = f;
+          break;
+        }
+      }
+    }
     final String effectiveFormatFilter =
-        _selectedDeckFormatFilter.isNotEmpty &&
-            availableFormats.contains(_selectedDeckFormatFilter)
-        ? _selectedDeckFormatFilter
-        : '';
+        (_selectedDeckFormatFilter == _noFormatFilterValue &&
+                hasDeckWithoutFormat)
+            ? _noFormatFilterValue
+            : (matchedFormat ?? '');
     final String effectiveTagFilter =
         _selectedDeckTagFilter.isNotEmpty &&
             availableTags.contains(_selectedDeckTagFilter)
@@ -749,6 +657,58 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            InkWell(
+                              onTap: () => setState(
+                                () => _filtersExpanded = !_filtersExpanded,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.tune_rounded,
+                                      size: 18,
+                                      color: Colors.white.withValues(alpha: 0.7),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      txt.t('deckList.sortFilter'),
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white.withValues(
+                                          alpha: 0.85,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_hasActiveDeckFilters) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFFFFAA33),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ],
+                                    const Spacer(),
+                                    Icon(
+                                      _filtersExpanded
+                                          ? Icons.expand_less_rounded
+                                          : Icons.expand_more_rounded,
+                                      size: 18,
+                                      color: Colors.white.withValues(alpha: 0.7),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (_filtersExpanded) ...[
+                            const SizedBox(height: 12),
                             Text(
                               txt.t('deckList.sortBy'),
                               style: TextStyle(
@@ -793,42 +753,54 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                               },
                             ),
                             const SizedBox(height: 14),
-                            InkWell(
-                              onTap: () => setState(
-                                () => _filtersExpanded = !_filtersExpanded,
-                              ),
-                              borderRadius: BorderRadius.circular(4),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 2,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      txt.t('deckList.filters'),
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white.withValues(
-                                          alpha: 0.7,
-                                        ),
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    Icon(
-                                      _filtersExpanded
-                                          ? Icons.expand_less_rounded
-                                          : Icons.expand_more_rounded,
-                                      size: 18,
-                                      color: Colors.white.withValues(alpha: 0.7),
-                                    ),
-                                  ],
-                                ),
+                            Text(
+                              txt.t('deckList.filters'),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                             ),
-                            if (_filtersExpanded) ...[
                             const SizedBox(height: 8),
-                            if (availableFormats.isNotEmpty)
+                            TextField(
+                              controller: _deckNameFilterController,
+                              decoration: InputDecoration(
+                                labelText: txt.t('field.deckName'),
+                                hintText: txt.t('deckList.searchByName'),
+                                prefixIcon: const Icon(
+                                  Icons.search_rounded,
+                                  size: 20,
+                                ),
+                                suffixIcon: _deckNameFilter.isEmpty
+                                    ? null
+                                    : IconButton(
+                                        icon: const Icon(
+                                          Icons.clear_rounded,
+                                          size: 18,
+                                        ),
+                                        onPressed: () {
+                                          _deckNameFilterController.clear();
+                                          setState(() {
+                                            _deckNameFilter = '';
+                                            _visibleDeckCount = _deckPageSize;
+                                          });
+                                        },
+                                      ),
+                                border: const OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              onChanged: (String value) {
+                                setState(() {
+                                  _deckNameFilter = value;
+                                  _visibleDeckCount = _deckPageSize;
+                                });
+                              },
+                            ),
+                            if (availableFormats.isNotEmpty ||
+                                hasDeckWithoutFormat)
+                              const SizedBox(height: 12),
+                            if (availableFormats.isNotEmpty ||
+                                hasDeckWithoutFormat)
                               SearchableComboField(
                                 value: effectiveFormatFilter,
                                 decoration: InputDecoration(
@@ -841,6 +813,11 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                                     value: '',
                                     label: txt.t('deckList.allFormats'),
                                   ),
+                                  if (hasDeckWithoutFormat)
+                                    ComboItem(
+                                      value: _noFormatFilterValue,
+                                      label: txt.t('field.noFormat'),
+                                    ),
                                 ],
                                 items: availableFormats
                                     .map(
@@ -855,7 +832,8 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                                   });
                                 },
                               ),
-                            if (availableFormats.isNotEmpty &&
+                            if ((availableFormats.isNotEmpty ||
+                                    hasDeckWithoutFormat) &&
                                 availableTags.isNotEmpty)
                               const SizedBox(height: 12),
                             if (availableTags.isNotEmpty)
@@ -885,9 +863,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                                   });
                                 },
                               ),
-                            if (availableFormats.isNotEmpty ||
-                                availableTags.isNotEmpty)
-                              const SizedBox(height: 12),
+                            const SizedBox(height: 12),
                             Row(
                               children: [
                                 Expanded(

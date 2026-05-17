@@ -5,8 +5,11 @@ import '../l10n/app_strings.dart';
 import '../models/match.dart';
 import '../models/sideboard.dart';
 import 'clearable_text_field.dart';
+import 'deck_form_dialog.dart';
 import 'searchable_combo_field.dart';
 import 'text_prompt_dialog.dart';
+
+enum _FormatMismatchChoice { useMatchFormat, useDeckFormat }
 
 @immutable
 class MatchEditorInput {
@@ -136,7 +139,7 @@ class _MatchEditorDialogState extends State<MatchEditorDialog> {
     _opponentCtrl = TextEditingController(text: i.opponentName);
     _tagCtrl = TextEditingController(text: i.tag);
     _decks = List<SideboardDeck>.from(i.decks);
-    _format = i.format.trim();
+    _format = _canonicalFormat(i.format);
     _deckId = _resolveId(i.deckId, i.deckName);
     _deckName = (_deckId.isEmpty && i.deckName.trim().isNotEmpty)
         ? i.deckName.trim()
@@ -186,64 +189,165 @@ class _MatchEditorDialogState extends State<MatchEditorDialog> {
       filterDecksByFormat(_decks, _format);
 
   List<String> _formatOptions() {
-    final Set<String> set = <String>{};
-    for (final SideboardDeck d in _decks) {
-      final String f = d.format.trim();
-      if (f.isNotEmpty) set.add(f);
+    final Map<String, String> byKey = <String, String>{};
+    void addFormat(String raw) {
+      final String trimmed = raw.trim();
+      if (trimmed.isEmpty) return;
+      byKey.putIfAbsent(trimmed.toLowerCase(), () => trimmed);
     }
-    if (_format.trim().isNotEmpty) set.add(_format.trim());
-    final List<String> sorted = set.toList(growable: false);
+
+    for (final SideboardDeck d in _decks) {
+      addFormat(d.format);
+    }
+    addFormat(_format);
+    final List<String> sorted = byKey.values.toList(growable: false);
     sorted.sort(
       (String a, String b) => a.toLowerCase().compareTo(b.toLowerCase()),
     );
     return sorted;
   }
 
-  void _normalizeDeckSelections() {
+  String _canonicalFormat(String raw) {
+    final String trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    final String key = trimmed.toLowerCase();
+    for (final SideboardDeck d in _decks) {
+      if (d.format.trim().toLowerCase() == key) {
+        return d.format.trim();
+      }
+    }
+    return trimmed;
+  }
+
+  bool _normalizeDeckSelections() {
+    bool cleared = false;
     if (_deckId.isNotEmpty) {
       final SideboardDeck? d = _byId(_deckId);
       if (d == null || !deckMatchesFormat(d, _format)) {
         _deckId = '';
+        cleared = true;
       }
     }
     if (_opponentDeckId.isNotEmpty) {
       final SideboardDeck? d = _byId(_opponentDeckId);
       if (d == null || !deckMatchesFormat(d, _format)) {
         _opponentDeckId = '';
+        cleared = true;
       }
     }
+    return cleared;
   }
 
   Future<String?> _addDeck(String query, {bool isOpponent = false}) async {
-    final String? name = await showTextPromptDialog(
+    final String noFormatLabel = context.txt.t('field.noFormat');
+    final DeckFormResult? result = await showDeckFormDialog(
       context,
-      title: isOpponent
-          ? 'New opponent deck'
-          : context.txt.t('field.addNewDeck'),
-      initialValue: query,
-      hintText: context.txt.t('field.deckName'),
+      existingDecks: _decks
+          .where((SideboardDeck d) => d.deletedAt == null)
+          .toList(growable: false),
+      existingFormats: _formatOptions(),
+      initialName: query.trim(),
+      initialFormat: _format.trim(),
     );
-    if (name == null) return null;
-    final String trimmed = name.trim();
-    if (trimmed.isEmpty) return null;
-    final SideboardDeck? existing = _byName(trimmed);
+    if (result == null || !mounted) return null;
+    final String trimmedName = result.name;
+    final String trimmedFormat = result.format;
+    if (trimmedName.isEmpty) return null;
+    final SideboardDeck? existing = _byName(trimmedName);
     if (existing != null) return existing.id;
+
+    final String matchFormat = _format.trim();
+    final String canonicalDeckFormat = _canonicalFormat(trimmedFormat);
+    String effectiveFormat = canonicalDeckFormat;
+    if (matchFormat.isNotEmpty &&
+        canonicalDeckFormat.toLowerCase() != matchFormat.toLowerCase()) {
+      final _FormatMismatchChoice? choice = await _resolveFormatMismatch(
+        matchFormat: matchFormat,
+        deckFormat: canonicalDeckFormat.isEmpty
+            ? noFormatLabel
+            : canonicalDeckFormat,
+      );
+      if (choice == null || !mounted) return null;
+      switch (choice) {
+        case _FormatMismatchChoice.useDeckFormat:
+          _format = canonicalDeckFormat;
+          effectiveFormat = canonicalDeckFormat;
+          break;
+        case _FormatMismatchChoice.useMatchFormat:
+          effectiveFormat = matchFormat;
+          break;
+      }
+    } else if (matchFormat.isEmpty && canonicalDeckFormat.isNotEmpty) {
+      _format = canonicalDeckFormat;
+    }
+
     final SideboardDeck newDeck = SideboardDeck(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
-      name: trimmed,
+      name: trimmedName,
       createdAt: DateTime.now(),
       isFavorite: false,
       userNotes: '',
       matchups: const <SideboardMatchup>[],
-      format: _format.trim(),
+      format: effectiveFormat,
       tag: '',
       tcgKey: widget.input.tcgKey,
     );
     setState(() {
       _decks = <SideboardDeck>[newDeck, ..._decks];
       _createdDecks.add(newDeck);
+      _normalizeDeckSelections();
     });
     return newDeck.id;
+  }
+
+  Future<_FormatMismatchChoice?> _resolveFormatMismatch({
+    required String matchFormat,
+    required String deckFormat,
+  }) {
+    final AppStrings txt = context.txt;
+    return showDialog<_FormatMismatchChoice>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text(txt.t('deckForm.mismatchTitle')),
+          content: Text(
+            txt.t(
+              'deckForm.mismatchBody',
+              params: <String, Object?>{
+                'matchFormat': matchFormat,
+                'deckFormat': deckFormat,
+              },
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(txt.t('common.cancel')),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext)
+                  .pop(_FormatMismatchChoice.useMatchFormat),
+              child: Text(
+                txt.t(
+                  'deckForm.useMatchFormat',
+                  params: <String, Object?>{'format': matchFormat},
+                ),
+              ),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext)
+                  .pop(_FormatMismatchChoice.useDeckFormat),
+              child: Text(
+                txt.t(
+                  'deckForm.useDeckFormat',
+                  params: <String, Object?>{'format': deckFormat},
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _save() {
@@ -315,6 +419,10 @@ class _MatchEditorDialogState extends State<MatchEditorDialog> {
             .toList(growable: false),
         addLabel: context.txt.t('field.addNewFormat'),
         onAdd: (String q) async {
+          final AppStrings txt = context.txt;
+          final ScaffoldMessengerState messenger = ScaffoldMessenger.of(
+            context,
+          );
           final String? created = await showTextPromptDialog(
             context,
             title: 'New format',
@@ -323,12 +431,39 @@ class _MatchEditorDialogState extends State<MatchEditorDialog> {
           );
           if (created == null) return null;
           final String trimmed = created.trim();
-          return trimmed.isEmpty ? null : trimmed;
+          if (trimmed.isEmpty) return null;
+          final String canonical = _canonicalFormat(trimmed);
+          if (canonical.toLowerCase() == trimmed.toLowerCase() &&
+              canonical != trimmed) {
+            messenger.showSnackBar(
+              SnackBar(
+                duration: const Duration(seconds: 3),
+                content: Text(
+                  txt.t(
+                    'deckForm.formatAlreadyExists',
+                    params: <String, Object?>{'format': canonical},
+                  ),
+                ),
+              ),
+            );
+          }
+          return canonical;
         },
         onChanged: (String value) {
+          final String previous = _format;
           setState(() {
-            _format = value.trim();
-            _normalizeDeckSelections();
+            _format = _canonicalFormat(value);
+            final bool cleared = _normalizeDeckSelections();
+            if (cleared && previous.toLowerCase() != _format.toLowerCase()) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  duration: const Duration(seconds: 3),
+                  content: Text(
+                    context.txt.t('deckForm.selectionClearedOnFormatChange'),
+                  ),
+                ),
+              );
+            }
           });
         },
       ));

@@ -32,12 +32,31 @@ class _DeckMatchupHistoryScreenState extends State<DeckMatchupHistoryScreen> {
   late List<GameRecord> _records;
   SideboardMatchupSortMode _matchupSortMode =
       SideboardMatchupSortMode.createdAt;
+  final TextEditingController _matchupNameFilterController =
+      TextEditingController();
+  String _matchupNameFilter = '';
+  bool _matchupFiltersExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _matchups = List<SideboardMatchup>.from(widget.deck.matchups);
     _records = List<GameRecord>.from(widget.records);
+  }
+
+  @override
+  void dispose() {
+    _matchupNameFilterController.dispose();
+    super.dispose();
+  }
+
+  bool get _hasActiveMatchupFilters => _matchupNameFilter.trim().isNotEmpty;
+
+  void _clearMatchupFilters() {
+    _matchupNameFilterController.clear();
+    setState(() {
+      _matchupNameFilter = '';
+    });
   }
 
   void _closeWithResult() {
@@ -267,9 +286,13 @@ class _DeckMatchupHistoryScreenState extends State<DeckMatchupHistoryScreen> {
   }
 
   List<SideboardMatchup> _sortedMatchups() {
-    final List<SideboardMatchup> sorted = List<SideboardMatchup>.from(
-      _matchups,
-    );
+    final String query = _matchupNameFilter.trim().toLowerCase();
+    final List<SideboardMatchup> sorted = _matchups
+        .where(
+          (SideboardMatchup m) =>
+              query.isEmpty || m.name.toLowerCase().contains(query),
+        )
+        .toList(growable: true);
     switch (_matchupSortMode) {
       case SideboardMatchupSortMode.alphabetical:
         sorted.sort((SideboardMatchup a, SideboardMatchup b) {
@@ -283,6 +306,154 @@ class _DeckMatchupHistoryScreenState extends State<DeckMatchupHistoryScreen> {
         break;
     }
     return sorted;
+  }
+
+  Widget _buildSideboardPlansControls(AppStrings txt) {
+    return Card(
+      color: const Color(0xFF1E1B1B),
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: () => setState(
+                () => _matchupFiltersExpanded = !_matchupFiltersExpanded,
+              ),
+              borderRadius: BorderRadius.circular(4),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      size: 18,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      txt.t('sideboardPlans.sortFilter'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white.withValues(alpha: 0.85),
+                      ),
+                    ),
+                    if (_hasActiveMatchupFilters) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFFAA33),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    Icon(
+                      _matchupFiltersExpanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      size: 18,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_matchupFiltersExpanded) ...[
+              const SizedBox(height: 12),
+              Text(
+                txt.t('history.sortBy'),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<SideboardMatchupSortMode>(
+                      initialValue: _matchupSortMode,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items:
+                          <DropdownMenuItem<SideboardMatchupSortMode>>[
+                            DropdownMenuItem<SideboardMatchupSortMode>(
+                              value: SideboardMatchupSortMode.createdAt,
+                              child: Text(
+                                txt.t('deckList.sortCreationDate'),
+                              ),
+                            ),
+                            DropdownMenuItem<SideboardMatchupSortMode>(
+                              value: SideboardMatchupSortMode.alphabetical,
+                              child: Text(
+                                txt.t('deckList.sortAlphabetical'),
+                              ),
+                            ),
+                          ],
+                      onChanged: (SideboardMatchupSortMode? mode) {
+                        if (mode == null) {
+                          return;
+                        }
+                        setState(() {
+                          _matchupSortMode = mode;
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: _hasActiveMatchupFilters
+                        ? _clearMatchupFilters
+                        : null,
+                    icon: const Icon(Icons.filter_alt_off_rounded),
+                    label: Text(txt.t('history.clearFilters')),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                txt.t('history.filters'),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _matchupNameFilterController,
+                onChanged: (String value) {
+                  setState(() {
+                    _matchupNameFilter = value;
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: txt.t('sideboardPlans.searchByName'),
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _matchupNameFilter.trim().isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: _clearMatchupFilters,
+                          icon: const Icon(Icons.close_rounded),
+                          tooltip: txt.t('common.clear'),
+                        ),
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -311,27 +482,6 @@ class _DeckMatchupHistoryScreenState extends State<DeckMatchupHistoryScreen> {
           ),
           actions: showSideboardPlans
               ? <Widget>[
-                  PopupMenuButton<SideboardMatchupSortMode>(
-                    tooltip: 'Sort sideboards',
-                    onSelected: (SideboardMatchupSortMode mode) {
-                      setState(() {
-                        _matchupSortMode = mode;
-                      });
-                    },
-                    itemBuilder: (BuildContext context) {
-                      return const <PopupMenuEntry<SideboardMatchupSortMode>>[
-                        PopupMenuItem<SideboardMatchupSortMode>(
-                          value: SideboardMatchupSortMode.alphabetical,
-                          child: Text('Alphabetical'),
-                        ),
-                        PopupMenuItem<SideboardMatchupSortMode>(
-                          value: SideboardMatchupSortMode.createdAt,
-                          child: Text('Creation Date'),
-                        ),
-                      ];
-                    },
-                    icon: const Icon(Icons.sort_rounded),
-                  ),
                   IconButton(
                     tooltip: 'Add matchup',
                     onPressed: _addMatchup,
@@ -344,6 +494,7 @@ class _DeckMatchupHistoryScreenState extends State<DeckMatchupHistoryScreen> {
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
           children: [
             if (showSideboardPlans) ...[
+              _buildSideboardPlansControls(txt),
               if (sortedMatchups.isEmpty)
                 Card(
                   color: const Color(0xFF1E1B1B),
