@@ -103,7 +103,7 @@ class SyncService extends ChangeNotifier {
                   'updatedAt':
                       (r['updatedAt'] as String?) ??
                       DateTime.now().toIso8601String(),
-                  'deleted': false,
+                  'deleted': r['deletedAt'] != null,
                 },
               )
               .toList(growable: false),
@@ -115,7 +115,7 @@ class SyncService extends ChangeNotifier {
                   'updatedAt':
                       (d['updatedAt'] as String?) ??
                       DateTime.now().toIso8601String(),
-                  'deleted': false,
+                  'deleted': d['deletedAt'] != null,
                 },
               )
               .toList(growable: false),

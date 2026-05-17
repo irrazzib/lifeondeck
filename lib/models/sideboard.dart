@@ -137,7 +137,7 @@ class SideboardMatchup {
 
 @immutable
 class SideboardDeck {
-  const SideboardDeck({
+  SideboardDeck({
     required this.id,
     required this.name,
     required this.createdAt,
@@ -147,7 +147,9 @@ class SideboardDeck {
     this.format = '',
     this.tag = '',
     this.tcgKey = 'yugioh',
-  });
+    DateTime? updatedAt,
+    this.deletedAt,
+  }) : updatedAt = updatedAt ?? createdAt;
 
   final String id;
   final String name;
@@ -158,6 +160,8 @@ class SideboardDeck {
   final String format;
   final String tag;
   final String tcgKey;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
 
   SideboardDeck copyWith({
     String? id,
@@ -169,7 +173,13 @@ class SideboardDeck {
     String? format,
     String? tag,
     String? tcgKey,
+    DateTime? updatedAt,
+    DateTime? deletedAt,
+    bool clearDeletedAt = false,
+    bool bumpUpdatedAt = true,
   }) {
+    final DateTime resolvedUpdatedAt = updatedAt
+        ?? (bumpUpdatedAt ? DateTime.now() : this.updatedAt);
     return SideboardDeck(
       id: id ?? this.id,
       name: name ?? this.name,
@@ -180,6 +190,8 @@ class SideboardDeck {
       format: format ?? this.format,
       tag: tag ?? this.tag,
       tcgKey: tcgKey ?? this.tcgKey,
+      updatedAt: resolvedUpdatedAt,
+      deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
     );
   }
 
@@ -196,6 +208,8 @@ class SideboardDeck {
       'tag': tag,
       'format': format,
       'tcgKey': tcgKey,
+      'updatedAt': updatedAt.toIso8601String(),
+      if (deletedAt != null) 'deletedAt': deletedAt!.toIso8601String(),
     };
   }
 
@@ -209,6 +223,11 @@ class SideboardDeck {
     final DateTime createdAt =
         DateTime.tryParse((json['createdAt'] as String?) ?? '') ??
         DateTime.now();
+    final DateTime updatedAt =
+        DateTime.tryParse((json['updatedAt'] as String?) ?? '') ?? createdAt;
+    final DateTime? deletedAt = json['deletedAt'] is String
+        ? DateTime.tryParse(json['deletedAt'] as String)
+        : null;
     final bool isFavorite = json['isFavorite'] == true;
     final String userNotes = (json['userNotes'] as String?) ?? '';
     final String tag = ((json['tag'] as String?) ?? '').trim();
@@ -235,6 +254,8 @@ class SideboardDeck {
       format: format.isNotEmpty ? format : tag,
       tag: tag,
       tcgKey: tcgKey,
+      updatedAt: updatedAt,
+      deletedAt: deletedAt,
     );
   }
 }

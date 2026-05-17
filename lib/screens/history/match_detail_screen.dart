@@ -9,6 +9,17 @@ import '../../widgets/match_editor_dialog.dart';
 import '../../widgets/text_prompt_dialog.dart';
 import '../../core/ux_state.dart';
 
+@immutable
+class MatchDetailResult {
+  const MatchDetailResult({
+    required this.games,
+    required this.createdDecks,
+  });
+
+  final List<GameRecord> games;
+  final List<SideboardDeck> createdDecks;
+}
+
 class TwoPlayerMatchDetailScreen extends StatefulWidget {
   const TwoPlayerMatchDetailScreen({
     required this.tcg,
@@ -29,6 +40,8 @@ class _TwoPlayerMatchDetailScreenState
     extends State<TwoPlayerMatchDetailScreen> {
   late List<GameRecord> _games;
   late MatchMetadata _metadata;
+  late List<SideboardDeck> _decks;
+  final List<SideboardDeck> _createdDecks = <SideboardDeck>[];
 
   @override
   void initState() {
@@ -42,6 +55,7 @@ class _TwoPlayerMatchDetailScreenState
       name: initialName,
       matchDate: initialMatchDate,
     );
+    _decks = List<SideboardDeck>.from(widget.decks);
     _games = widget.match.games
         .map((GameRecord game) => _applyMetadataToGame(game))
         .toList(growable: false);
@@ -68,7 +82,12 @@ class _TwoPlayerMatchDetailScreenState
     final List<GameRecord> updated = _games
         .map((GameRecord game) => _applyMetadataToGame(game))
         .toList(growable: false);
-    Navigator.of(context).pop(updated);
+    Navigator.of(context).pop(
+      MatchDetailResult(
+        games: updated,
+        createdDecks: List<SideboardDeck>.unmodifiable(_createdDecks),
+      ),
+    );
   }
 
   String _effectiveMatchName() {
@@ -166,7 +185,8 @@ class _TwoPlayerMatchDetailScreenState
       context,
       title: context.txt.t('dialog.matchDetails'),
       input: MatchEditorInput(
-        decks: widget.decks,
+        decks: _decks,
+        tcgKey: widget.tcg.storageKey,
         matchName: _effectiveMatchName(),
         opponentName: _metadata.opponentName,
         format: _metadata.format,
@@ -183,6 +203,13 @@ class _TwoPlayerMatchDetailScreenState
 
     if (result == null || !mounted) {
       return;
+    }
+
+    if (result.createdDecks.isNotEmpty) {
+      setState(() {
+        _decks = <SideboardDeck>[...result.createdDecks, ..._decks];
+        _createdDecks.addAll(result.createdDecks);
+      });
     }
 
     _applyMatchMetadata(

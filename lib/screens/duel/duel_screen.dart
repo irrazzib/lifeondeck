@@ -1366,7 +1366,6 @@ class _DuelScreenState extends State<DuelScreen> {
         gameStage: _selectedGameStage,
         showDeckInUse: true,
         showGameStage: true,
-        allowCreateDeck: true,
       ),
     );
 

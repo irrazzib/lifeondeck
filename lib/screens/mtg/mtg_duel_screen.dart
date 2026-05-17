@@ -1403,7 +1403,6 @@ class _MtgDuelScreenState extends State<MtgDuelScreen> {
         showTag: !_isMultiplayer,
         showGameStage: !_isMultiplayer,
         showDeckInUse: true,
-        allowCreateDeck: true,
       ),
       extraContentBuilder: _isMultiplayer
           ? (StateSetter setDialogState) {

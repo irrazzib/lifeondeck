@@ -12,7 +12,7 @@ class ComboItem {
 /// Combo field with search and optional "add new" action.
 ///
 /// - [fixedItems]: always shown at top, not filtered by search query (e.g. "All", "No deck").
-/// - [items]: searchable; shows first 5 without query, all matches when query is active.
+/// - [items]: fully scrollable list; the search field filters it in-place.
 /// - [onAdd]: if non-null, an "add new" row is always visible at the bottom of the sheet.
 ///   Called with the current search query. Returns the created value or null to cancel.
 /// - [addLabel]: overrides the default "Add new..." label.
@@ -111,7 +111,7 @@ class _ComboSheet extends StatefulWidget {
 }
 
 class _ComboSheetState extends State<_ComboSheet> {
-  static const int _maxUnfilteredItems = 5;
+  static const int _autofocusSearchThreshold = 12;
 
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
@@ -134,7 +134,7 @@ class _ComboSheetState extends State<_ComboSheet> {
 
   List<ComboItem> get _filteredItems {
     if (_query.isEmpty) {
-      return widget.items.take(_maxUnfilteredItems).toList(growable: false);
+      return widget.items;
     }
     return widget.items
         .where((ComboItem i) => i.label.toLowerCase().contains(_query))
@@ -145,112 +145,101 @@ class _ComboSheetState extends State<_ComboSheet> {
   Widget build(BuildContext context) {
     final AppStrings txt = context.txt;
     final List<ComboItem> dynamic = _filteredItems;
-    final bool hasMore =
-        _query.isEmpty && widget.items.length > _maxUnfilteredItems;
     final bool noResults =
         _query.isNotEmpty && dynamic.isEmpty && widget.fixedItems.isEmpty;
+    final double maxHeight = MediaQuery.of(context).size.height * 0.75;
 
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const SizedBox(height: 8),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.outlineVariant,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: _searchController,
-              autofocus: widget.items.length > _maxUnfilteredItems,
-              decoration: InputDecoration(
-                hintText: txt.t('combo.search'),
-                prefixIcon: const Icon(Icons.search),
-                border: const OutlineInputBorder(),
-                isDense: true,
-                suffixIcon: _query.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => _searchController.clear(),
-                      )
-                    : null,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Flexible(
-            child: ListView(
-              shrinkWrap: true,
-              children: <Widget>[
-                for (final ComboItem item in widget.fixedItems)
-                  _ItemTile(
-                    item: item,
-                    selected: item.value == widget.selectedValue,
-                  ),
-                if (widget.fixedItems.isNotEmpty &&
-                    (dynamic.isNotEmpty || widget.onAdd != null))
-                  const Divider(height: 1),
-                if (noResults)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 16,
-                      horizontal: 16,
-                    ),
-                    child: Text(
-                      txt.t('combo.noResults'),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                    ),
-                  ),
-                for (final ComboItem item in dynamic)
-                  _ItemTile(
-                    item: item,
-                    selected: item.value == widget.selectedValue,
-                  ),
-                if (hasMore)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 4,
-                      horizontal: 16,
-                    ),
-                    child: Text(
-                      '+ ${widget.items.length - _maxUnfilteredItems} more — search to find',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                    ),
-                  ),
-                if (widget.onAdd != null) ...<Widget>[
-                  if (dynamic.isNotEmpty || widget.fixedItems.isNotEmpty)
-                    const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.add),
-                    title: Text(
-                      widget.addLabel ?? context.txt.t('combo.addNew'),
-                    ),
-                    onTap: () async {
-                      final String? created = await widget.onAdd!(_query);
-                      if (created != null && context.mounted) {
-                        Navigator.of(context).pop(created);
-                      }
-                    },
-                  ),
-                ],
-                const SizedBox(height: 8),
-              ],
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _searchController,
+                autofocus: widget.items.length > _autofocusSearchThreshold,
+                decoration: InputDecoration(
+                  hintText: txt.t('combo.search'),
+                  prefixIcon: const Icon(Icons.search),
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  suffixIcon: _query.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () => _searchController.clear(),
+                        )
+                      : null,
+                ),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: <Widget>[
+                  for (final ComboItem item in widget.fixedItems)
+                    _ItemTile(
+                      item: item,
+                      selected: item.value == widget.selectedValue,
+                    ),
+                  if (widget.fixedItems.isNotEmpty &&
+                      (dynamic.isNotEmpty || widget.onAdd != null))
+                    const Divider(height: 1),
+                  if (noResults)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 16,
+                      ),
+                      child: Text(
+                        txt.t('combo.noResults'),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                      ),
+                    ),
+                  for (final ComboItem item in dynamic)
+                    _ItemTile(
+                      item: item,
+                      selected: item.value == widget.selectedValue,
+                    ),
+                  if (widget.onAdd != null) ...<Widget>[
+                    if (dynamic.isNotEmpty || widget.fixedItems.isNotEmpty)
+                      const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.add),
+                      title: Text(
+                        widget.addLabel ?? context.txt.t('combo.addNew'),
+                      ),
+                      onTap: () async {
+                        final String? created = await widget.onAdd!(_query);
+                        if (created != null && context.mounted) {
+                          Navigator.of(context).pop(created);
+                        }
+                      },
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

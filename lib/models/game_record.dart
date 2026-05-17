@@ -7,7 +7,7 @@ import 'sideboard.dart';
 
 @immutable
 class GameRecord {
-  const GameRecord({
+  GameRecord({
     required this.id,
     required this.title,
     required this.createdAt,
@@ -29,7 +29,9 @@ class GameRecord {
     this.opponentDeckName = '',
     this.matchTag = '',
     this.matchDate = '',
-  });
+    DateTime? updatedAt,
+    this.deletedAt,
+  }) : updatedAt = updatedAt ?? createdAt;
 
   final String id;
   final String title;
@@ -52,6 +54,8 @@ class GameRecord {
   final String opponentDeckName;
   final String matchTag;
   final String matchDate;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
 
   GameRecord copyWith({
     String? id,
@@ -75,7 +79,13 @@ class GameRecord {
     String? opponentDeckName,
     String? matchTag,
     String? matchDate,
+    DateTime? updatedAt,
+    DateTime? deletedAt,
+    bool clearDeletedAt = false,
+    bool bumpUpdatedAt = true,
   }) {
+    final DateTime resolvedUpdatedAt = updatedAt
+        ?? (bumpUpdatedAt ? DateTime.now() : this.updatedAt);
     return GameRecord(
       id: id ?? this.id,
       title: title ?? this.title,
@@ -98,6 +108,8 @@ class GameRecord {
       opponentDeckName: opponentDeckName ?? this.opponentDeckName,
       matchTag: matchTag ?? this.matchTag,
       matchDate: matchDate ?? this.matchDate,
+      updatedAt: resolvedUpdatedAt,
+      deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
     );
   }
 
@@ -124,6 +136,8 @@ class GameRecord {
       'opponentDeckName': opponentDeckName,
       'matchTag': matchTag,
       'matchDate': matchDate,
+      'updatedAt': updatedAt.toIso8601String(),
+      if (deletedAt != null) 'deletedAt': deletedAt!.toIso8601String(),
     };
   }
 
@@ -214,6 +228,11 @@ class GameRecord {
     final String? rawDate = json['createdAt'] as String?;
     final DateTime createdAt =
         DateTime.tryParse(rawDate ?? '') ?? DateTime.now();
+    final DateTime updatedAt =
+        DateTime.tryParse((json['updatedAt'] as String?) ?? '') ?? createdAt;
+    final DateTime? deletedAt = json['deletedAt'] is String
+        ? DateTime.tryParse(json['deletedAt'] as String)
+        : null;
 
     return GameRecord(
       id: id,
@@ -237,6 +256,8 @@ class GameRecord {
       opponentDeckName: opponentDeckName,
       matchTag: matchTag,
       matchDate: matchDate,
+      updatedAt: updatedAt,
+      deletedAt: deletedAt,
     );
   }
 }

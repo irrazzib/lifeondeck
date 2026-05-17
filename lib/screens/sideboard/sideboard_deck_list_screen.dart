@@ -96,6 +96,9 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
   }) {
     final List<SideboardDeck> sorted = _decks
         .where((SideboardDeck deck) {
+          if (deck.deletedAt != null) {
+            return false;
+          }
           if (_showFavoritesOnly && !deck.isFavorite) {
             return false;
           }
@@ -610,6 +613,49 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
     });
   }
 
+  Future<void> _deleteDeck(SideboardDeck deck) async {
+    final AppStrings txt = context.txt;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text(txt.t('sideboard.deleteDeckTitle')),
+          content: Text(
+            txt.t(
+              'sideboard.deleteDeckBody',
+              params: <String, Object?>{'name': deck.name},
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(txt.t('common.cancel')),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF6A2323),
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(txt.t('common.delete')),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+    final int index = _decks.indexWhere(
+      (SideboardDeck item) => item.id == deck.id,
+    );
+    if (index < 0) {
+      return;
+    }
+    setState(() {
+      _decks[index] = _decks[index].copyWith(deletedAt: DateTime.now());
+    });
+  }
+
   Future<void> _openDeck(SideboardDeck deck) async {
     final SideboardDeckEditResult? result = await Navigator.of(context)
         .push<SideboardDeckEditResult>(
@@ -989,6 +1035,14 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                                               : Colors.white.withValues(
                                                   alpha: 0.65,
                                                 ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: () => _deleteDeck(deck),
+                                        tooltip: context.txt.t('sideboard.deleteDeck'),
+                                        icon: Icon(
+                                          Icons.delete_outline_rounded,
+                                          color: Colors.white.withValues(alpha: 0.7),
                                         ),
                                       ),
                                       const Icon(Icons.chevron_right_rounded),

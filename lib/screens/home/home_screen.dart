@@ -88,6 +88,12 @@ class _HomeScreenState extends State<HomeScreen> {
         .toList(growable: false);
   }
 
+  List<SideboardDeck> _liveDecksForSelectedGame() {
+    return _decksForSelectedGame()
+        .where((SideboardDeck deck) => deck.deletedAt == null)
+        .toList(growable: false);
+  }
+
   SideboardDeck? _findDeckByNameForSelectedGame(String rawName) {
     return findUniqueDeckByName(_decksForSelectedGame(), rawName);
   }
@@ -436,6 +442,40 @@ class _HomeScreenState extends State<HomeScreen> {
     return merged;
   }
 
+  List<SideboardDeck> _mergePulledDecks({
+    required List<SideboardDeck> local,
+    required List<SideboardDeck> remote,
+  }) {
+    final Map<String, SideboardDeck> byId = <String, SideboardDeck>{
+      for (final SideboardDeck d in local) d.id: d,
+    };
+    for (final SideboardDeck incoming in remote) {
+      final SideboardDeck? existing = byId[incoming.id];
+      if (existing == null ||
+          !incoming.updatedAt.isBefore(existing.updatedAt)) {
+        byId[incoming.id] = incoming;
+      }
+    }
+    return byId.values.toList(growable: false);
+  }
+
+  List<GameRecord> _mergePulledRecords({
+    required List<GameRecord> local,
+    required List<GameRecord> remote,
+  }) {
+    final Map<String, GameRecord> byId = <String, GameRecord>{
+      for (final GameRecord r in local) r.id: r,
+    };
+    for (final GameRecord incoming in remote) {
+      final GameRecord? existing = byId[incoming.id];
+      if (existing == null ||
+          !incoming.updatedAt.isBefore(existing.updatedAt)) {
+        byId[incoming.id] = incoming;
+      }
+    }
+    return byId.values.toList(growable: false);
+  }
+
   List<SideboardDeck> _mergeDecksForGame(
     List<SideboardDeck> updatedDecks,
     String tcgKey,
@@ -556,10 +596,16 @@ class _HomeScreenState extends State<HomeScreen> {
               .map(SideboardDeck.fromJson)
               .toList(growable: false);
       if (remoteRecords != null && remoteRecords.isNotEmpty) {
-        setState(() => _gameRecords = remoteRecords);
+        setState(() => _gameRecords = _mergePulledRecords(
+          local: _gameRecords,
+          remote: remoteRecords,
+        ));
       }
       if (remoteDecks != null && remoteDecks.isNotEmpty) {
-        setState(() => _sideboardDecks = remoteDecks);
+        setState(() => _sideboardDecks = _mergePulledDecks(
+          local: _sideboardDecks,
+          remote: remoteDecks,
+        ));
       }
       await _persistState();
     };
@@ -766,7 +812,7 @@ class _HomeScreenState extends State<HomeScreen> {
     String duelTitlePrefix = 'Duel';
     final SupportedTcg selectedGame = _selectedGame;
     final String selectedTcgKey = _selectedTcgKey;
-    List<SideboardDeck> availableDecks = _decksForSelectedGame();
+    List<SideboardDeck> availableDecks = _liveDecksForSelectedGame();
     final List<String> availableDeckNames = availableDecks
         .map((SideboardDeck deck) => deck.name)
         .toList(growable: false);
@@ -931,11 +977,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final String tcgKey = _selectedTcgKey;
     final List<GameRecord> scopedRecords = _recordsForSelectedGame();
-    final List<SideboardDeck> scopedDecks = _decksForSelectedGame();
+    final List<SideboardDeck> scopedDecks = _liveDecksForSelectedGame();
 
-    final List<GameRecord>? updatedRecords = await Navigator.of(context)
-        .push<List<GameRecord>>(
-          MaterialPageRoute<List<GameRecord>>(
+    final GameHistoryResult? historyResult = await Navigator.of(context)
+        .push<GameHistoryResult>(
+          MaterialPageRoute<GameHistoryResult>(
             builder: (_) => GameHistoryScreen(
               records: scopedRecords,
               decks: scopedDecks,
@@ -944,12 +990,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
 
-    if (updatedRecords == null) {
+    if (historyResult == null) {
       return;
     }
 
     setState(() {
-      _gameRecords = _mergeRecordsForGame(updatedRecords, tcgKey);
+      _gameRecords = _mergeRecordsForGame(historyResult.records, tcgKey);
+      if (historyResult.createdDecks.isNotEmpty) {
+        final List<SideboardDeck> merged = _mergeDeckCollections(
+          existing: _decksForSelectedGame(),
+          incoming: historyResult.createdDecks,
+          tcgKey: tcgKey,
+        );
+        _sideboardDecks = _mergeDecksForGame(merged, tcgKey);
+      }
     });
     await _persistState();
   }

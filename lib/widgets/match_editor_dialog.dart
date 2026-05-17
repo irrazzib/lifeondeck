@@ -34,7 +34,6 @@ class MatchEditorInput {
     this.showDate = false,
     this.showGameStage = false,
     this.showResult = false,
-    this.allowCreateDeck = false,
   });
 
   final List<SideboardDeck> decks;
@@ -62,8 +61,6 @@ class MatchEditorInput {
   final bool showDate;
   final bool showGameStage;
   final bool showResult;
-
-  final bool allowCreateDeck;
 }
 
 @immutable
@@ -218,9 +215,6 @@ class _MatchEditorDialogState extends State<MatchEditorDialog> {
   }
 
   Future<String?> _addDeck(String query, {bool isOpponent = false}) async {
-    if (!widget.input.allowCreateDeck) {
-      return _addCustomName(query, isOpponent: isOpponent);
-    }
     final String? name = await showTextPromptDialog(
       context,
       title: isOpponent
@@ -250,31 +244,6 @@ class _MatchEditorDialogState extends State<MatchEditorDialog> {
       _createdDecks.add(newDeck);
     });
     return newDeck.id;
-  }
-
-  Future<String?> _addCustomName(
-    String query, {
-    bool isOpponent = false,
-  }) async {
-    final String? name = await showTextPromptDialog(
-      context,
-      title: context.txt.t('field.addNewDeck'),
-      initialValue: isOpponent ? _opponentDeckName : _deckName,
-      hintText: context.txt.t('field.deckName'),
-    );
-    if (name == null) return null;
-    final String trimmed = name.trim();
-    if (trimmed.isEmpty) return null;
-    setState(() {
-      if (isOpponent) {
-        _opponentDeckId = '';
-        _opponentDeckName = trimmed;
-      } else {
-        _deckId = '';
-        _deckName = trimmed;
-      }
-    });
-    return isOpponent ? '__custom_opp_deck__' : '__custom_deck__';
   }
 
   void _save() {

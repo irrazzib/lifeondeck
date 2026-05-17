@@ -16,6 +16,17 @@ import 'dart:math';
 import 'package:flutter/services.dart';
 import '../../core/ux_state.dart';
 
+@immutable
+class GameHistoryResult {
+  const GameHistoryResult({
+    required this.records,
+    required this.createdDecks,
+  });
+
+  final List<GameRecord> records;
+  final List<SideboardDeck> createdDecks;
+}
+
 class GameHistoryScreen extends StatefulWidget {
   const GameHistoryScreen({
     super.key,
@@ -36,6 +47,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   static const int _matchPageSize = 5;
 
   late List<GameRecord> _records;
+  late List<SideboardDeck> _decks;
+  final List<SideboardDeck> _createdDecks = <SideboardDeck>[];
   MatchHistorySortMode _matchHistorySortMode = MatchHistorySortMode.date;
   String _selectedMatchDeckFilter = '';
   String _selectedMatchOpponentDeckFilter = '';
@@ -51,6 +64,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     super.initState();
     _matchListController = ScrollController();
     _opponentNameFilterController = TextEditingController();
+    _decks = List<SideboardDeck>.from(widget.decks);
     _records = List<GameRecord>.from(widget.records);
     _records.sort((GameRecord a, GameRecord b) {
       return b.createdAt.compareTo(a.createdAt);
@@ -90,7 +104,20 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   }
 
   void _closeWithResult() {
-    Navigator.of(context).pop(_records);
+    Navigator.of(context).pop(
+      GameHistoryResult(
+        records: List<GameRecord>.from(_records),
+        createdDecks: List<SideboardDeck>.unmodifiable(_createdDecks),
+      ),
+    );
+  }
+
+  void _mergeCreatedDecks(List<SideboardDeck> incoming) {
+    if (incoming.isEmpty) return;
+    setState(() {
+      _decks = <SideboardDeck>[...incoming, ..._decks];
+      _createdDecks.addAll(incoming);
+    });
   }
 
   bool get _hasActiveMatchFilters {
@@ -459,19 +486,21 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   }
 
   Future<void> _openMatchGroup(MatchRecord match) async {
-    final List<GameRecord>? updatedGames = await Navigator.of(context)
-        .push<List<GameRecord>>(
-          MaterialPageRoute<List<GameRecord>>(
+    final MatchDetailResult? detailResult = await Navigator.of(context)
+        .push<MatchDetailResult>(
+          MaterialPageRoute<MatchDetailResult>(
             builder: (_) => TwoPlayerMatchDetailScreen(
               tcg: widget.tcg,
-              decks: widget.decks,
+              decks: _decks,
               match: match,
             ),
           ),
         );
-    if (updatedGames == null) {
+    if (detailResult == null) {
       return;
     }
+
+    _mergeCreatedDecks(detailResult.createdDecks);
 
     final Set<String> oldIds = match.games
         .map((GameRecord record) => record.id)
@@ -480,7 +509,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       _records = _records
           .where((GameRecord record) => !oldIds.contains(record.id))
           .toList(growable: false);
-      _records = <GameRecord>[...updatedGames, ..._records];
+      _records = <GameRecord>[...detailResult.games, ..._records];
       _records.sort((GameRecord a, GameRecord b) {
         return b.createdAt.compareTo(a.createdAt);
       });
@@ -503,7 +532,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     if (deckId.isEmpty) {
       return null;
     }
-    for (final SideboardDeck deck in widget.decks) {
+    for (final SideboardDeck deck in _decks) {
       if (deck.id == deckId) {
         return deck;
       }
@@ -512,7 +541,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   }
 
   SideboardDeck? _deckByName(String deckName) {
-    return findUniqueDeckByName(widget.decks, deckName);
+    return findUniqueDeckByName(_decks, deckName);
   }
 
   String _resolvedDeckName(GameRecord record) {
@@ -584,7 +613,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       context,
       title: context.txt.t('dialog.matchDetails'),
       input: MatchEditorInput(
-        decks: widget.decks,
+        decks: _decks,
+        tcgKey: widget.tcg.storageKey,
         opponentName: record.opponentName,
         deckId: _resolvedDeckId(record),
         deckName: _resolvedDeckName(record),
@@ -602,6 +632,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     if (result == null) {
       return;
     }
+    _mergeCreatedDecks(result.createdDecks);
     _updateRecord(
       record.copyWith(
         opponentName: result.opponentName,
@@ -900,7 +931,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
       context,
       title: context.txt.t('history.addMatch'),
       input: MatchEditorInput(
-        decks: widget.decks,
+        decks: _decks,
+        tcgKey: widget.tcg.storageKey,
         matchName: defaultMatchName,
         showMatchName: true,
         showOpponent: true,
@@ -970,6 +1002,8 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     if (result == null || !mounted) {
       return;
     }
+
+    _mergeCreatedDecks(result.createdDecks);
 
     final bool anyResult = gameResults.any((String r) => r.isNotEmpty);
     if (!anyResult) {
@@ -1780,7 +1814,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
                                 label: context.txt.t('field.noDeck'),
                               ),
                             ],
-                            items: widget.decks
+                            items: _decks
                                 .map(
                                   (SideboardDeck d) =>
                                       ComboItem(value: d.id, label: d.name),
