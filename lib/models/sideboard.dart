@@ -135,6 +135,24 @@ class SideboardMatchup {
   }
 }
 
+/// Canonical MTG color codes — WUBRG + colorless. Order matters: it is
+/// preserved in storage and used as the default display order.
+const List<String> mtgColorCodes = <String>['W', 'U', 'B', 'R', 'G', 'C'];
+
+List<String> sanitizeMtgColors(Iterable<Object?> raw) {
+  final Set<String> seen = <String>{};
+  final List<String> result = <String>[];
+  for (final Object? entry in raw) {
+    if (entry is! String) continue;
+    final String code = entry.trim().toUpperCase();
+    if (!mtgColorCodes.contains(code)) continue;
+    if (seen.add(code)) {
+      result.add(code);
+    }
+  }
+  return result;
+}
+
 @immutable
 class SideboardDeck {
   SideboardDeck({
@@ -147,6 +165,7 @@ class SideboardDeck {
     this.format = '',
     this.tag = '',
     this.tcgKey = 'yugioh',
+    this.mtgColors = const <String>[],
     DateTime? updatedAt,
     this.deletedAt,
   }) : updatedAt = updatedAt ?? createdAt;
@@ -160,6 +179,7 @@ class SideboardDeck {
   final String format;
   final String tag;
   final String tcgKey;
+  final List<String> mtgColors;
   final DateTime updatedAt;
   final DateTime? deletedAt;
 
@@ -173,6 +193,7 @@ class SideboardDeck {
     String? format,
     String? tag,
     String? tcgKey,
+    List<String>? mtgColors,
     DateTime? updatedAt,
     DateTime? deletedAt,
     bool clearDeletedAt = false,
@@ -190,6 +211,7 @@ class SideboardDeck {
       format: format ?? this.format,
       tag: tag ?? this.tag,
       tcgKey: tcgKey ?? this.tcgKey,
+      mtgColors: mtgColors ?? this.mtgColors,
       updatedAt: resolvedUpdatedAt,
       deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
     );
@@ -208,6 +230,7 @@ class SideboardDeck {
       'tag': tag,
       'format': format,
       'tcgKey': tcgKey,
+      if (mtgColors.isNotEmpty) 'mtgColors': mtgColors,
       'updatedAt': updatedAt.toIso8601String(),
       if (deletedAt != null) 'deletedAt': deletedAt!.toIso8601String(),
     };
@@ -233,6 +256,10 @@ class SideboardDeck {
     final String tag = ((json['tag'] as String?) ?? '').trim();
     final String format = ((json['format'] as String?) ?? '').trim();
     final String tcgKey = normalizeTcgKey(json['tcgKey'] as String?);
+    final Object? rawColors = json['mtgColors'];
+    final List<String> mtgColors = rawColors is List
+        ? sanitizeMtgColors(rawColors)
+        : const <String>[];
     final Object? rawMatchups = json['matchups'];
     final List<SideboardMatchup> parsedMatchups = rawMatchups is List
         ? rawMatchups
@@ -254,6 +281,7 @@ class SideboardDeck {
       format: format.isNotEmpty ? format : tag,
       tag: tag,
       tcgKey: tcgKey,
+      mtgColors: mtgColors,
       updatedAt: updatedAt,
       deletedAt: deletedAt,
     );

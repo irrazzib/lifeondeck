@@ -248,6 +248,7 @@ class _MatchEditorDialogState extends State<MatchEditorDialog> {
       existingFormats: _formatOptions(),
       initialName: query.trim(),
       initialFormat: _format.trim(),
+      tcgKey: widget.input.tcgKey,
     );
     if (result == null || !mounted) return null;
     final String trimmedName = result.name;
@@ -291,6 +292,7 @@ class _MatchEditorDialogState extends State<MatchEditorDialog> {
       format: effectiveFormat,
       tag: '',
       tcgKey: widget.input.tcgKey,
+      mtgColors: result.mtgColors,
     );
     setState(() {
       _decks = <SideboardDeck>[newDeck, ..._decks];

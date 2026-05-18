@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants.dart';
 import '../../l10n/app_strings.dart';
 import '../../widgets/deck_form_dialog.dart';
+import '../../widgets/mtg_color_symbols.dart';
 import '../../widgets/searchable_combo_field.dart';
 import '../../models/app_settings.dart';
 import '../../models/game_record.dart';
@@ -198,6 +199,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
           .toList(growable: false),
       existingFormats: _existingDeckFormats(),
       editingDeck: initialDeck,
+      tcgKey: widget.tcg.storageKey,
     );
   }
 
@@ -425,7 +427,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
   }
 
   Future<void> _addDeck() async {
-    final ({String name, String format})? deckData = await _promptNewDeckData();
+    final DeckFormResult? deckData = await _promptNewDeckData();
     if (deckData == null) {
       return;
     }
@@ -441,6 +443,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
       format: deckData.format,
       tag: '',
       tcgKey: widget.tcg.storageKey,
+      mtgColors: deckData.mtgColors,
     );
 
     bool shouldAutoInsert = false;
@@ -460,7 +463,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
   }
 
   Future<void> _editDeck(SideboardDeck deck) async {
-    final ({String name, String format})? updated = await _promptNewDeckData(
+    final DeckFormResult? updated = await _promptNewDeckData(
       initialDeck: deck,
     );
     if (updated == null) {
@@ -475,6 +478,7 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
     final SideboardDeck updatedDeck = _decks[index].copyWith(
       name: updated.name,
       format: updated.format,
+      mtgColors: updated.mtgColors,
     );
     setState(() {
       List<SideboardDeck> nextDecks = List<SideboardDeck>.from(_decks);
@@ -973,12 +977,25 @@ class _SideboardDeckListScreenState extends State<SideboardDeckListScreen> {
                                 color: const Color(0xFF1E1B1B),
                                 child: ListTile(
                                   onTap: () => _openDeck(deck),
-                                  title: Text(
-                                    deck.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 17,
-                                    ),
+                                  title: Row(
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: Text(
+                                          deck.name,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 17,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (deck.mtgColors.isNotEmpty) ...<Widget>[
+                                        const SizedBox(width: 8),
+                                        MtgColorBadgeStrip(
+                                          colors: deck.mtgColors,
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                   subtitle: Padding(
                                     padding: const EdgeInsets.only(top: 4),

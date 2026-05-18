@@ -165,6 +165,7 @@ class AppStrings {
           'Selected deck was cleared: its format no longer matches the match.',
       'deckForm.formatAlreadyExists':
           'Format already exists as "{format}". Using existing one.',
+      'deckForm.mtgColors': 'Colors',
       'statistics.title': 'Statistics',
       'statistics.empty': 'No match data for this deck yet.',
       'statistics.vs': 'vs {deck}',
@@ -430,6 +431,7 @@ class AppStrings {
           'Il deck selezionato è stato rimosso: il suo formato non corrisponde più al match.',
       'deckForm.formatAlreadyExists':
           'Formato già esistente come "{format}". Verrà usato quello.',
+      'deckForm.mtgColors': 'Colori',
       'statistics.title': 'Statistiche',
       'statistics.empty': 'Nessun dato match per questo deck.',
       'statistics.vs': 'vs {deck}',

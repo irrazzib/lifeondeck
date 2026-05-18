@@ -3,16 +3,23 @@ import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import '../l10n/app_strings.dart';
 import '../models/sideboard.dart';
+import 'mtg_color_symbols.dart';
 
-/// Result returned by [showDeckFormDialog]: trimmed name and format.
-typedef DeckFormResult = ({String name, String format});
+/// Result returned by [showDeckFormDialog]: trimmed name, format, and any
+/// MTG color identity selected (empty for non-MTG decks).
+typedef DeckFormResult = ({
+  String name,
+  String format,
+  List<String> mtgColors,
+});
 
 /// Unified deck creation/edit dialog used by every flow that needs to add or
 /// edit a [SideboardDeck]. Always asks for both name and format so that callers
 /// can never end up with a deck missing its format.
 ///
 /// Pass [editingDeck] for edit mode; pass [initialFormat] to pre-fill the
-/// format field (e.g. from the current match context).
+/// format field (e.g. from the current match context). [tcgKey] gates
+/// TCG-specific fields (the MTG color selector only shows when it is 'mtg').
 Future<DeckFormResult?> showDeckFormDialog(
   BuildContext context, {
   required List<SideboardDeck> existingDecks,
@@ -20,7 +27,9 @@ Future<DeckFormResult?> showDeckFormDialog(
   SideboardDeck? editingDeck,
   String initialName = '',
   String initialFormat = '',
+  String tcgKey = '',
 }) {
+  final String resolvedTcgKey = editingDeck?.tcgKey ?? tcgKey;
   return showDialog<DeckFormResult>(
     context: context,
     builder: (BuildContext dialogContext) {
@@ -30,6 +39,8 @@ Future<DeckFormResult?> showDeckFormDialog(
         editingDeck: editingDeck,
         initialName: editingDeck?.name ?? initialName,
         initialFormat: editingDeck?.format ?? initialFormat,
+        initialMtgColors: editingDeck?.mtgColors ?? const <String>[],
+        tcgKey: resolvedTcgKey,
       );
     },
   );
@@ -42,6 +53,8 @@ class _DeckFormDialog extends StatefulWidget {
     required this.editingDeck,
     required this.initialName,
     required this.initialFormat,
+    required this.initialMtgColors,
+    required this.tcgKey,
   });
 
   final List<SideboardDeck> existingDecks;
@@ -49,6 +62,8 @@ class _DeckFormDialog extends StatefulWidget {
   final SideboardDeck? editingDeck;
   final String initialName;
   final String initialFormat;
+  final List<String> initialMtgColors;
+  final String tcgKey;
 
   @override
   State<_DeckFormDialog> createState() => _DeckFormDialogState();
@@ -57,13 +72,17 @@ class _DeckFormDialog extends StatefulWidget {
 class _DeckFormDialogState extends State<_DeckFormDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _formatController;
+  late List<String> _mtgColors;
   String? _nameErrorText;
+
+  bool get _showMtgColors => widget.tcgKey == 'mtg';
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.initialName);
     _formatController = TextEditingController(text: widget.initialFormat);
+    _mtgColors = sanitizeMtgColors(widget.initialMtgColors);
   }
 
   @override
@@ -105,7 +124,13 @@ class _DeckFormDialogState extends State<_DeckFormDialog> {
       return;
     }
     Navigator.of(context).pop(
-      (name: name, format: _canonicalizeFormat(_formatController.text)),
+      (
+        name: name,
+        format: _canonicalizeFormat(_formatController.text),
+        mtgColors: _showMtgColors
+            ? List<String>.unmodifiable(_mtgColors)
+            : const <String>[],
+      ),
     );
   }
 
@@ -178,6 +203,25 @@ class _DeckFormDialogState extends State<_DeckFormDialog> {
                       },
                     ),
                 ],
+              ),
+            ],
+            if (_showMtgColors) ...<Widget>[
+              const SizedBox(height: 14),
+              Text(
+                txt.t('deckForm.mtgColors'),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withValues(alpha: 0.74),
+                ),
+              ),
+              const SizedBox(height: 8),
+              MtgColorSelector(
+                selected: _mtgColors,
+                onChanged: (List<String> next) {
+                  setState(() {
+                    _mtgColors = next;
+                  });
+                },
               ),
             ],
           ],
