@@ -47,6 +47,18 @@ MatchAggregateResult aggregateMatchResultFromGames(List<GameRecord> games) {
     }
   }
 
+  if (games.length == 1) {
+    if (wins == 1) {
+      return MatchAggregateResult.win;
+    }
+    if (losses == 1) {
+      return MatchAggregateResult.loss;
+    }
+    if (draws == 1) {
+      return MatchAggregateResult.draw;
+    }
+  }
+
   if (wins == 0 && losses == 0 && draws > 0) {
     return MatchAggregateResult.draw;
   }
