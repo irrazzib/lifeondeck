@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants.dart';
@@ -48,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, String> _lastDeckByTcg = <String, String>{};
   SupportedTcg _selectedGame = SupportedTcg.yugioh;
   String _saveDebugStatus = 'idle';
+  String _buildTag = '';
   Future<void> _queuedCheckpointSave = Future<void>.value();
 
   // Auth / sync services (initialised in initState).
@@ -564,7 +566,16 @@ class _HomeScreenState extends State<HomeScreen> {
       authService: _authService,
     );
     _authService.addListener(_onAuthStateChanged);
+    _loadBuildTag();
     _initWithSync();
+  }
+
+  Future<void> _loadBuildTag() async {
+    final PackageInfo info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    setState(() {
+      _buildTag = 'v${info.version} (${info.buildNumber})';
+    });
   }
 
   Future<void> _initWithSync() async {
@@ -1155,7 +1166,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '$appBuildTag • $_saveDebugStatus',
+                        '$_buildTag • $_saveDebugStatus',
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
