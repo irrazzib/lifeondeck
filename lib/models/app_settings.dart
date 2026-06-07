@@ -4,7 +4,7 @@ import '../core/constants.dart';
 
 @immutable
 class AppSettings {
-  const AppSettings({
+  AppSettings({
     required this.playerOneName,
     required this.playerTwoName,
     required this.startupTcgKey,
@@ -15,20 +15,21 @@ class AppSettings {
     required this.lifePointsBackgroundColor,
     required this.playerOneColor,
     required this.playerTwoColor,
-  });
+    DateTime? updatedAt,
+  }) : updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 
   factory AppSettings.defaults() {
-    return const AppSettings(
+    return AppSettings(
       playerOneName: 'Player 1',
       playerTwoName: 'Player 2',
       startupTcgKey: 'yugioh',
       appLanguageKey: 'system',
-      backgroundStartColor: Color(0xFF141414),
-      backgroundEndColor: Color(0xFF341212),
-      buttonColor: Color(0xFF2B2424),
-      lifePointsBackgroundColor: Color(0xFF261E1E),
-      playerOneColor: Color(0xFF261E1E),
-      playerTwoColor: Color(0xFF1E2626),
+      backgroundStartColor: const Color(0xFF141414),
+      backgroundEndColor: const Color(0xFF341212),
+      buttonColor: const Color(0xFF2B2424),
+      lifePointsBackgroundColor: const Color(0xFF261E1E),
+      playerOneColor: const Color(0xFF261E1E),
+      playerTwoColor: const Color(0xFF1E2626),
     );
   }
 
@@ -43,6 +44,11 @@ class AppSettings {
   final Color playerOneColor;
   final Color playerTwoColor;
 
+  /// UTC timestamp of the last mutation. Used by sync as the conflict key for
+  /// app settings. Bumped automatically on every [copyWith] unless an explicit
+  /// value is passed.
+  final DateTime updatedAt;
+
   AppSettings copyWith({
     String? playerOneName,
     String? playerTwoName,
@@ -54,6 +60,7 @@ class AppSettings {
     Color? lifePointsBackgroundColor,
     Color? playerOneColor,
     Color? playerTwoColor,
+    DateTime? updatedAt,
   }) {
     return AppSettings(
       playerOneName: playerOneName ?? this.playerOneName,
@@ -67,6 +74,7 @@ class AppSettings {
           lifePointsBackgroundColor ?? this.lifePointsBackgroundColor,
       playerOneColor: playerOneColor ?? this.playerOneColor,
       playerTwoColor: playerTwoColor ?? this.playerTwoColor,
+      updatedAt: updatedAt ?? DateTime.now().toUtc(),
     );
   }
 
@@ -82,6 +90,7 @@ class AppSettings {
       'lifePointsBackgroundColor': lifePointsBackgroundColor.toARGB32(),
       'playerOneColor': playerOneColor.toARGB32(),
       'playerTwoColor': playerTwoColor.toARGB32(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
@@ -144,6 +153,7 @@ class AppSettings {
       ),
       playerOneColor: parseColor('playerOneColor', fallback.playerOneColor),
       playerTwoColor: parseColor('playerTwoColor', fallback.playerTwoColor),
+      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '')?.toUtc(),
     );
   }
 }

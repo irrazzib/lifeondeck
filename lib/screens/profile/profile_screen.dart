@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
 import '../../models/sync_state.dart';
+import '../../services/api_client.dart';
 import '../../services/auth_service.dart';
 import '../../services/sync_service.dart';
 
@@ -10,10 +11,12 @@ class ProfileScreen extends StatefulWidget {
     super.key,
     required this.authService,
     required this.syncService,
+    required this.apiClient,
   });
 
   final AuthService authService;
   final SyncService syncService;
+  final ApiClient apiClient;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -21,6 +24,21 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _signingIn = false;
+
+  /// API reachability: null = probing, true = healthy, false = unreachable.
+  bool? _apiHealthy;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkApiHealth();
+  }
+
+  Future<void> _checkApiHealth() async {
+    setState(() => _apiHealthy = null);
+    final bool ok = await widget.apiClient.checkHealth();
+    if (mounted) setState(() => _apiHealthy = ok);
+  }
 
   Future<void> _handleSignIn() async {
     setState(() => _signingIn = true);
@@ -59,6 +77,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (diff.inMinutes < 1) return '< 1 min';
     if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
     return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildApiStatus(AppStrings txt) {
+    final (IconData icon, Color color, String label) = switch (_apiHealthy) {
+      null => (Icons.hourglass_empty, Colors.grey, txt.t('account.apiChecking')),
+      true => (Icons.check_circle, Colors.green, txt.t('account.apiOnline')),
+      false => (Icons.error_outline, Colors.red, txt.t('account.apiOffline')),
+    };
+    return Card(
+      child: ListTile(
+        leading: Icon(icon, color: color),
+        title: Text(txt.t('account.apiSection')),
+        subtitle: Text(label, style: TextStyle(color: color)),
+        trailing: IconButton(
+          icon: const Icon(Icons.refresh),
+          tooltip: txt.t('account.apiSection'),
+          onPressed: _apiHealthy == null ? null : _checkApiHealth,
+        ),
+      ),
+    );
   }
 
   @override
@@ -114,6 +152,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ),
+            const SizedBox(height: 24),
+            _buildApiStatus(txt),
           ],
         ),
       ),
@@ -244,6 +284,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               );
             },
           ),
+          const SizedBox(height: 16),
+          _buildApiStatus(txt),
           const SizedBox(height: 32),
           OutlinedButton.icon(
             onPressed: _handleSignOut,

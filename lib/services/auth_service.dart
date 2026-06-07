@@ -75,6 +75,54 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  /// Mint a fresh server JWT from a force-refreshed Firebase ID token.
+  ///
+  /// Wired into [ApiClient.onRefresh] so a 401 triggers a transparent refresh +
+  /// retry. Returns the new JWT, or null (after signing out) when refresh is
+  /// impossible — letting the caller surface the original auth failure.
+  Future<String?> refreshToken() async {
+    try {
+      final User? firebaseUser = _firebaseAuth.currentUser;
+      if (firebaseUser == null) {
+        await signOut();
+        return null;
+      }
+
+      final String? idToken = await firebaseUser.getIdToken(true);
+      if (idToken == null) {
+        await signOut();
+        return null;
+      }
+
+      final Map<String, dynamic> response = await _apiClient.post(
+        '/auth/firebase',
+        <String, dynamic>{'idToken': idToken},
+      );
+
+      final String token = response['token'] as String;
+      final AppUser refreshed = (_currentUser ??
+              AppUser.fromJson(<String, dynamic>{
+                'id': response['user']['id'] as String,
+                'email': response['user']['email'] as String,
+                'displayName': response['user']['displayName'] as String,
+                'token': token,
+              }))
+          .copyWith(token: token);
+
+      await _storage.write(key: 'jwt_token', value: token);
+      await _storage.write(
+        key: 'current_user',
+        value: jsonEncode(refreshed.toJson()),
+      );
+      _currentUser = refreshed;
+      notifyListeners();
+      return token;
+    } catch (_) {
+      await signOut();
+      return null;
+    }
+  }
+
   Future<void> signOut() async {
     await _firebaseAuth.signOut();
     await _clearUser();

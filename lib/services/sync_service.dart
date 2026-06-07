@@ -3,10 +3,32 @@ import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/sync_state.dart';
 import 'api_client.dart';
 import 'auth_service.dart';
+
+// ---------------------------------------------------------------------------
+// Sync wire contract (client <-> /api/v1/sync)
+//
+// Every record crosses the wire wrapped in an envelope:
+//
+//     { "id": <string>, "data": <json-string>, "updatedAt": <iso8601>,
+//       "deleted": <bool> }
+//
+// `data` is the COMPLETE record serialised as a JSON *string* (the server
+// treats it as an opaque blob). The blob already contains `id`, `updatedAt`
+// and `deletedAt`, so those envelope fields are duplicated transport metadata
+// used only for routing / last-write-wins on the server.
+//
+//   PUSH (here): 'data' = jsonEncode(record.toJson()); envelope `updatedAt`
+//                and `deleted` are derived from the same map.
+//   PULL (home_screen onApplyPull): jsonDecode(item['data']) -> Model.fromJson.
+//
+// App settings use the same envelope but a single object instead of a list,
+// and are pushed only when their real `updatedAt` is newer than the last sync.
+// ---------------------------------------------------------------------------
 
 /// Represents the full app state to be synchronised with the remote backend.
 class AppSyncPayload {
@@ -35,6 +57,8 @@ class SyncService extends ChangeNotifier {
         _authService = authService,
         _autoSyncInterval = autoSyncInterval;
 
+  static const String _lastSyncKey = 'last_sync_at';
+
   final ApiClient _apiClient;
   final AuthService _authService;
   final Duration _autoSyncInterval;
@@ -48,6 +72,16 @@ class SyncService extends ChangeNotifier {
 
   GetPayloadCallback? onGetPayload;
   ApplyPullCallback? onApplyPull;
+
+  /// Restore the last successful sync timestamp from persistent storage.
+  /// Call once during app bootstrap before [startAutoSync].
+  Future<void> initialize() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? stored = prefs.getString(_lastSyncKey);
+    if (stored != null) {
+      _lastSyncedAt = DateTime.tryParse(stored)?.toUtc();
+    }
+  }
 
   /// Call after every local state mutation so the service knows a push is due.
   void markDirty() {
@@ -94,6 +128,20 @@ class SyncService extends ChangeNotifier {
       // PUSH local changes if the state is dirty.
       if (_dirty && onGetPayload != null) {
         final AppSyncPayload payload = onGetPayload!();
+
+        // App settings carry their own real updatedAt; only push them when they
+        // were actually mutated after the last successful sync, so a fresh pull
+        // never gets clobbered by stale local defaults.
+        final Map<String, dynamic>? settings = payload.appSettings;
+        final DateTime? settingsUpdatedAt = settings == null
+            ? null
+            : DateTime.tryParse(settings['updatedAt'] as String? ?? '')?.toUtc();
+        final bool pushSettings = settings != null &&
+            settingsUpdatedAt != null &&
+            settingsUpdatedAt.isAfter(
+              _lastSyncedAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+            );
+
         await _apiClient.postVoid('/sync', <String, dynamic>{
           'gameRecords': payload.gameRecords
               .map(
@@ -119,10 +167,10 @@ class SyncService extends ChangeNotifier {
                 },
               )
               .toList(growable: false),
-          if (payload.appSettings != null)
+          if (pushSettings)
             'appSettings': <String, dynamic>{
-              'data': jsonEncode(payload.appSettings),
-              'updatedAt': DateTime.now().toIso8601String(),
+              'data': jsonEncode(settings),
+              'updatedAt': settingsUpdatedAt.toIso8601String(),
             },
         });
         _dirty = false;
@@ -130,8 +178,8 @@ class SyncService extends ChangeNotifier {
 
       // PULL remote changes since the last successful sync.
       final String since =
-          _lastSyncedAt?.toIso8601String() ??
-          DateTime(2020).toIso8601String();
+          _lastSyncedAt?.toUtc().toIso8601String() ??
+          DateTime.utc(2020).toIso8601String();
       final Map<String, dynamic> pulled = await _apiClient.get(
         '/sync',
         params: <String, dynamic>{'since': since},
@@ -141,7 +189,12 @@ class SyncService extends ChangeNotifier {
         await onApplyPull!(pulled);
       }
 
-      _lastSyncedAt = DateTime.now();
+      _lastSyncedAt = DateTime.now().toUtc();
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _lastSyncKey,
+        _lastSyncedAt!.toIso8601String(),
+      );
       stateNotifier.value = stateNotifier.value.copyWith(
         status: SyncStatus.synced,
         lastSyncedAt: _lastSyncedAt,

@@ -2,10 +2,15 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiClient {
-  ApiClient({String baseUrl = 'http://localhost:5000/api/v1'}) {
+  ApiClient({String? baseUrl}) {
+    final String resolvedBaseUrl = baseUrl ??
+        const String.fromEnvironment(
+          'API_BASE_URL',
+          defaultValue: 'http://localhost:5000/api/v1',
+        );
     _dio = Dio(
       BaseOptions(
-        baseUrl: baseUrl,
+        baseUrl: resolvedBaseUrl,
         connectTimeout: const Duration(seconds: 10),
       ),
     );
@@ -18,12 +23,54 @@ class ApiClient {
           }
           handler.next(options);
         },
+        onError: _onError,
       ),
     );
   }
 
   late final Dio _dio;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
+  /// Refreshes the server JWT (typically via [AuthService]) and returns the new
+  /// token, or null if refresh failed. Wired externally to avoid a circular
+  /// dependency between [ApiClient] and the auth layer.
+  Future<String?> Function()? onRefresh;
+
+  static const String _retriedFlag = '__jwt_retried';
+
+  /// On a 401, transparently refresh the JWT once and replay the request.
+  Future<void> _onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
+    final RequestOptions options = err.requestOptions;
+    final bool isAuthCall = options.path.contains('/auth/firebase');
+    final bool alreadyRetried = options.extra[_retriedFlag] == true;
+
+    if (err.response?.statusCode != 401 ||
+        onRefresh == null ||
+        alreadyRetried ||
+        isAuthCall) {
+      handler.next(err);
+      return;
+    }
+
+    final String? newToken = await onRefresh!();
+    if (newToken == null) {
+      // Refresh failed (caller already signed out); propagate the original 401.
+      handler.next(err);
+      return;
+    }
+
+    options.extra[_retriedFlag] = true;
+    options.headers['Authorization'] = 'Bearer $newToken';
+    try {
+      final Response<dynamic> response = await _dio.fetch<dynamic>(options);
+      handler.resolve(response);
+    } on DioException catch (retryErr) {
+      handler.next(retryErr);
+    }
+  }
 
   Future<Map<String, dynamic>> post(
     String path,
@@ -45,5 +92,16 @@ class ApiClient {
 
   Future<void> postVoid(String path, Map<String, dynamic> body) async {
     await _dio.post<void>(path, data: body);
+  }
+
+  /// Probes the API `/health` endpoint (no auth required). Returns true when
+  /// the server responds 200, false on any error/timeout/non-2xx.
+  Future<bool> checkHealth() async {
+    try {
+      final Response<dynamic> response = await _dio.get<dynamic>('/health');
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
   }
 }

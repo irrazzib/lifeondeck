@@ -24,6 +24,7 @@ import '../mtg/mtg_duel_setup_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../sideboard/sideboard_deck_list_screen.dart';
 import '../../core/config.dart';
+import '../../widgets/sync_status_badge.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -478,6 +479,63 @@ class _HomeScreenState extends State<HomeScreen> {
     return byId.values.toList(growable: false);
   }
 
+  /// Decode a list of server sync items into domain models.
+  ///
+  /// Each item is `{id, data, updatedAt, deleted}` where `data` is the full
+  /// record serialised as a JSON **string** blob (the wire contract is
+  /// documented in `sync_service.dart`). The model is reconstructed from that
+  /// blob, which already carries `id`, `updatedAt` and `deletedAt`; the wrapper
+  /// fields are transport metadata only. Malformed blobs are skipped so one bad
+  /// row never aborts the whole pull.
+  List<T> _decodePulledItems<T>(
+    Object? rawItems,
+    T Function(Map<String, dynamic>) fromJson,
+  ) {
+    if (rawItems is! List) {
+      return <T>[];
+    }
+    final List<T> parsed = <T>[];
+    for (final Object? entry in rawItems) {
+      if (entry is! Map) {
+        continue;
+      }
+      final Object? data = entry['data'];
+      if (data is! String || data.isEmpty) {
+        continue;
+      }
+      try {
+        final dynamic decoded = jsonDecode(data);
+        if (decoded is Map) {
+          parsed.add(fromJson(Map<String, dynamic>.from(decoded)));
+        }
+      } catch (_) {
+        // Skip malformed blob.
+      }
+    }
+    return parsed;
+  }
+
+  /// Decode the single app-settings sync item (or null) from a pull response.
+  /// Same `{id, data, updatedAt, deleted}` envelope as the list items.
+  AppSettings? _decodePulledSettings(Object? rawItem) {
+    if (rawItem is! Map) {
+      return null;
+    }
+    final Object? data = rawItem['data'];
+    if (data is! String || data.isEmpty) {
+      return null;
+    }
+    try {
+      final dynamic decoded = jsonDecode(data);
+      if (decoded is Map) {
+        return AppSettings.fromJson(Map<String, dynamic>.from(decoded));
+      }
+    } catch (_) {
+      // Fall through to null on malformed blob.
+    }
+    return null;
+  }
+
   List<SideboardDeck> _mergeDecksForGame(
     List<SideboardDeck> updatedDecks,
     String tcgKey,
@@ -561,6 +619,8 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _apiClient = ApiClient();
     _authService = AuthService(_apiClient);
+    // Let the Dio client refresh an expired JWT transparently on a 401.
+    _apiClient.onRefresh = _authService.refreshToken;
     _syncService = SyncService(
       apiClient: _apiClient,
       authService: _authService,
@@ -580,6 +640,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initWithSync() async {
     await _loadStoredData();
+    await _syncService.initialize();
     await _authService.initialize();
     if (_authService.isAuthenticated) {
       _setupSync();
@@ -597,26 +658,41 @@ class _HomeScreenState extends State<HomeScreen> {
       appSettings: _settings.toJson(),
     );
     _syncService.onApplyPull = (Map<String, dynamic> pulled) async {
-      final List<GameRecord>? remoteRecords = (pulled['gameRecords'] as List?)
-          ?.whereType<Map<String, dynamic>>()
-          .map(GameRecord.fromJson)
-          .toList(growable: false);
-      final List<SideboardDeck>? remoteDecks =
-          (pulled['sideboardDecks'] as List?)
-              ?.whereType<Map<String, dynamic>>()
-              .map(SideboardDeck.fromJson)
-              .toList(growable: false);
-      if (remoteRecords != null && remoteRecords.isNotEmpty) {
+      // Each pulled item has shape {id, data, updatedAt, deleted} where `data`
+      // is the full record serialised as a JSON string blob. Decode the blob —
+      // it already carries id/updatedAt/deletedAt — before rebuilding the model.
+      final List<GameRecord> remoteRecords = _decodePulledItems<GameRecord>(
+        pulled['gameRecords'],
+        GameRecord.fromJson,
+      );
+      final List<SideboardDeck> remoteDecks =
+          _decodePulledItems<SideboardDeck>(
+        pulled['sideboardDecks'],
+        SideboardDeck.fromJson,
+      );
+      final AppSettings? remoteSettings =
+          _decodePulledSettings(pulled['appSettings']);
+
+      if (remoteRecords.isNotEmpty) {
         setState(() => _gameRecords = _mergePulledRecords(
           local: _gameRecords,
           remote: remoteRecords,
         ));
       }
-      if (remoteDecks != null && remoteDecks.isNotEmpty) {
+      if (remoteDecks.isNotEmpty) {
         setState(() => _sideboardDecks = _mergePulledDecks(
           local: _sideboardDecks,
           remote: remoteDecks,
         ));
+      }
+      // App settings are last-write-wins by their own updatedAt; only adopt the
+      // remote copy when it is strictly newer than the local one.
+      if (remoteSettings != null &&
+          remoteSettings.updatedAt.isAfter(_settings.updatedAt)) {
+        setState(() => _settings = remoteSettings);
+        AppRuntimeConfig.language.value = AppLanguageX.fromStorageKey(
+          remoteSettings.appLanguageKey,
+        );
       }
       await _persistState();
     };
@@ -1098,20 +1174,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openProfile() async {
-    // TODO: flusso login ancora da implementare
-    return;
-
-    final AppStrings txt = context.txt;
-    final bool allowed = await _ensurePremiumAccess(
-      featureName: txt.t('account.title'),
-    );
-    if (!allowed || !mounted) {
-      return;
-    }
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            ProfileScreen(authService: _authService, syncService: _syncService),
+        builder: (_) => ProfileScreen(
+          authService: _authService,
+          syncService: _syncService,
+          apiClient: _apiClient,
+        ),
       ),
     );
   }
@@ -1154,6 +1223,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: SyncStatusBadge(
+                          syncService: _syncService,
+                          onTap: _openProfile,
+                        ),
+                      ),
                       const Spacer(),
                       Text(
                         txt.t('app.title'),
@@ -1283,7 +1359,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               : txt.t('account.subtitleSignedOut'),
                           backgroundColor: activeSettings.buttonColor,
                           onPressed: _openProfile,
-                          locked: !_premiumUnlocked,
                         ),
                         const Spacer(),
                       ] else ...[
