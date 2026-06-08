@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working in the Flutter app project. For the API project, see `../lifeondeck-api/`. For solution-wide layout, see `../CLAUDE.md`.
+This file provides guidance to Claude Code (claude.ai/code) when working in the Flutter app project. For the API project, see `../api/CLAUDE.md`. For solution-wide layout, see `../CLAUDE.md`.
 
 ## Commands
 
