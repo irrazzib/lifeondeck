@@ -236,6 +236,11 @@ class AppStrings {
       'account.subtitleSignedIn': '{displayName}',
       'account.signInGoogle': 'Sign in with Google',
       'account.signOut': 'Sign out',
+      'account.clearLocalData': 'Clear local data',
+      'account.clearLocalDataConfirm':
+          'This removes the games, decks and settings stored on this device. '
+              'Data already synced stays on the server and will be restored at '
+              'the next sign-in.',
       'account.syncNow': 'Sync now',
       'account.lastSync': 'Last sync: {time}',
       'account.neverSynced': 'Never synced',
@@ -507,6 +512,11 @@ class AppStrings {
       'account.subtitleSignedIn': '{displayName}',
       'account.signInGoogle': 'Accedi con Google',
       'account.signOut': 'Esci',
+      'account.clearLocalData': 'Cancella dati locali',
+      'account.clearLocalDataConfirm':
+          'Rimuove partite, mazzi e impostazioni salvati su questo dispositivo. '
+              'I dati già sincronizzati restano sul server e verranno '
+              'ripristinati al prossimo accesso.',
       'account.syncNow': 'Sincronizza ora',
       'account.lastSync': 'Ultima sync: {time}',
       'account.neverSynced': 'Mai sincronizzato',

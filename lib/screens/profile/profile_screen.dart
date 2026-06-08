@@ -12,11 +12,16 @@ class ProfileScreen extends StatefulWidget {
     required this.authService,
     required this.syncService,
     required this.apiClient,
+    required this.onClearLocalData,
   });
 
   final AuthService authService;
   final SyncService syncService;
   final ApiClient apiClient;
+
+  /// Wipes account-scoped data from this device (records, decks, settings) and
+  /// resets the sync cursor. Surfaced only while signed out.
+  final Future<void> Function() onClearLocalData;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -67,6 +72,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (confirmed == true) {
       await widget.authService.signOut();
+    }
+  }
+
+  Future<void> _handleClearLocalData() async {
+    final AppStrings txt = context.txt;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: Text(txt.t('account.clearLocalData')),
+        content: Text(txt.t('account.clearLocalDataConfirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(txt.t('common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(txt.t('account.clearLocalData')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await widget.onClearLocalData();
     }
   }
 
@@ -154,6 +183,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
             const SizedBox(height: 24),
             _buildApiStatus(txt),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: _handleClearLocalData,
+              icon: const Icon(Icons.delete_outline),
+              label: Text(txt.t('account.clearLocalData')),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+            ),
           ],
         ),
       ),

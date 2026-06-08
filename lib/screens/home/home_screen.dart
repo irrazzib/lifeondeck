@@ -39,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const String _recordsKey = 'game_records_v1';
   static const String _sideboardDecksKey = 'sideboard_decks_v1';
   static const String _lastDeckByTcgKey = 'last_selected_deck_by_tcg_v1';
+  static const String _syncedAccountKey = 'synced_account_id_v1';
 
   bool _isLoading = true;
   bool _onboardingCompleted = true;
@@ -649,10 +650,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _initWithSync() async {
     await _loadStoredData();
     await _syncService.initialize();
+    // _authService.initialize() fires notifyListeners() when a valid session is
+    // restored, which drives _onAuthStateChanged -> _setupSync() + an immediate
+    // syncNow(). Keep the auth-reaction logic in one place (the listener) so
+    // cold start and runtime login follow the exact same path.
     await _authService.initialize();
-    if (_authService.isAuthenticated) {
-      _setupSync();
-    }
   }
 
   void _setupSync() {
@@ -744,6 +746,30 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     AppRuntimeConfig.language.value = AppLanguageX.fromStorageKey(
       settings.appLanguageKey,
+    );
+  }
+
+  /// Wipe all account-scoped data from memory and disk, resetting settings to
+  /// their defaults. Used on logout, on account switch, and by the guest
+  /// "clear local data" action. Deliberately leaves device-level state intact:
+  /// the premium entitlement and the onboarding / default-game UX flags.
+  Future<void> _clearLocalData() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_recordsKey);
+    await prefs.remove(_sideboardDecksKey);
+    await prefs.remove(_settingsKey);
+    await prefs.remove(_lastDeckByTcgKey);
+    if (!mounted) return;
+    final AppSettings defaults = _decodeSettings(null);
+    setState(() {
+      _gameRecords = <GameRecord>[];
+      _sideboardDecks = <SideboardDeck>[];
+      _settings = defaults;
+      _selectedGame = SupportedTcgX.fromStorageKey(defaults.startupTcgKey);
+      _lastDeckByTcg = <String, String>{};
+    });
+    AppRuntimeConfig.language.value = AppLanguageX.fromStorageKey(
+      defaults.appLanguageKey,
     );
   }
 
@@ -1171,14 +1197,49 @@ class _HomeScreenState extends State<HomeScreen> {
     await _persistState();
   }
 
-  void _onAuthStateChanged() {
+  Future<void> _onAuthStateChanged() async {
     if (!mounted) return;
-    setState(() {});
     if (_authService.isAuthenticated) {
+      final String uid = _authService.currentUser!.id;
+      final String? previous = await _readSyncedAccountId();
+      // A different account owns the data currently on disk: wipe it and reset
+      // the pull cursor before syncing. This is the safety net that also covers
+      // the case where the logout-wipe never ran (app killed mid-session).
+      if (previous != null && previous != uid) {
+        await _clearLocalData();
+        await _syncService.resetCursor();
+      }
+      await _writeSyncedAccountId(uid);
+      if (!mounted) return;
+      setState(() {});
       _setupSync();
+      // Sync immediately on login so the user gets feedback right away instead
+      // of waiting for the next auto-sync tick (up to 5 min).
+      await _syncService.syncNow();
     } else {
+      // Logout: wipe synced data + cursor so the next account starts clean.
       _syncService.stopAutoSync();
+      await _clearLocalData();
+      await _syncService.resetCursor();
+      await _clearSyncedAccountId();
+      if (!mounted) return;
+      setState(() {});
     }
+  }
+
+  Future<String?> _readSyncedAccountId() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_syncedAccountKey);
+  }
+
+  Future<void> _writeSyncedAccountId(String uid) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_syncedAccountKey, uid);
+  }
+
+  Future<void> _clearSyncedAccountId() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_syncedAccountKey);
   }
 
   Future<void> _openProfile() async {
@@ -1188,6 +1249,10 @@ class _HomeScreenState extends State<HomeScreen> {
           authService: _authService,
           syncService: _syncService,
           apiClient: _apiClient,
+          onClearLocalData: () async {
+            await _clearLocalData();
+            await _syncService.resetCursor();
+          },
         ),
       ),
     );

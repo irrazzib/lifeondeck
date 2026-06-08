@@ -101,6 +101,21 @@ class SyncService extends ChangeNotifier {
     _autoSyncTimer = null;
   }
 
+  /// Reset the pull cursor and pending state to a clean slate.
+  ///
+  /// Both [_lastSyncedAt] and its persisted `last_sync_at` key are global (not
+  /// scoped per account), so they must be cleared whenever the local data is
+  /// wiped — on logout or when a different account signs in — otherwise the
+  /// next pull's `since` would still be the previous user's cursor.
+  Future<void> resetCursor() async {
+    stopAutoSync();
+    _lastSyncedAt = null;
+    _dirty = false;
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_lastSyncKey);
+    stateNotifier.value = const SyncState();
+  }
+
   Future<void> _autoSync() async {
     if (!_authService.isAuthenticated || !_dirty) return;
     await syncNow();
