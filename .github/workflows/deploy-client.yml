@@ -24,7 +24,7 @@ jobs:
         working-directory: client
         run: |
           flutter pub get
-          flutter build web --base-href "/lifeondeck/"
+          flutter build web --base-href "/lifeondeck/" --dart-define=API_BASE_URL=/lifeondeck/api/v1
 
       - name: Login to GHCR
         uses: docker/login-action@v3
