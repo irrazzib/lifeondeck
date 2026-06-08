@@ -43,8 +43,8 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: |
-            ghcr.io/gmarra-it/lifeondeck-client:latest
-            ghcr.io/gmarra-it/lifeondeck-client:${{ github.sha }}
+            ghcr.io/irrazzib/lifeondeck-client:latest
+            ghcr.io/irrazzib/lifeondeck-client:${{ github.sha }}
 
       - name: Deploy on VM
         uses: appleboy/ssh-action@v1
