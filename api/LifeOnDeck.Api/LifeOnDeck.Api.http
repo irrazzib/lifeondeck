@@ -1,0 +1,6 @@
+@LifeOnDeck.Api_HostAddress = http://localhost:5100
+
+GET {{LifeOnDeck.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
