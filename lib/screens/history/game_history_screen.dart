@@ -47,6 +47,10 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   static const int _matchPageSize = 5;
 
   late List<GameRecord> _records;
+  // Tombstones for records deleted in this screen (or its match-detail child).
+  // Kept out of [_records] so display/stats stay clean, but re-emitted on close
+  // so the deletion propagates to persistence and sync.
+  final List<GameRecord> _deletedRecords = <GameRecord>[];
   late List<SideboardDeck> _decks;
   final List<SideboardDeck> _createdDecks = <SideboardDeck>[];
   MatchHistorySortMode _matchHistorySortMode = MatchHistorySortMode.date;
@@ -106,7 +110,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   void _closeWithResult() {
     Navigator.of(context).pop(
       GameHistoryResult(
-        records: List<GameRecord>.from(_records),
+        records: <GameRecord>[..._records, ..._deletedRecords],
         createdDecks: List<SideboardDeck>.unmodifiable(_createdDecks),
       ),
     );
@@ -505,14 +509,26 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     final Set<String> oldIds = match.games
         .map((GameRecord record) => record.id)
         .toSet();
+    // Games the detail screen soft-deleted come back as tombstones; keep them
+    // out of the visible list but carry them to the close result.
+    final List<GameRecord> returnedLive = detailResult.games
+        .where((GameRecord record) => record.deletedAt == null)
+        .toList(growable: false);
+    final List<GameRecord> returnedTombstones = detailResult.games
+        .where((GameRecord record) => record.deletedAt != null)
+        .toList(growable: false);
     setState(() {
       _records = _records
           .where((GameRecord record) => !oldIds.contains(record.id))
           .toList(growable: false);
-      _records = <GameRecord>[...detailResult.games, ..._records];
+      _records = <GameRecord>[...returnedLive, ..._records];
       _records.sort((GameRecord a, GameRecord b) {
         return b.createdAt.compareTo(a.createdAt);
       });
+      for (final GameRecord tombstone in returnedTombstones) {
+        _deletedRecords.removeWhere((GameRecord t) => t.id == tombstone.id);
+        _deletedRecords.add(tombstone);
+      }
     });
   }
 
@@ -910,7 +926,12 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
     }
 
     setState(() {
+      // Soft-delete: drop from the visible list, keep a tombstone so the
+      // deletion syncs instead of resurrecting on the next pull.
+      final GameRecord tombstone = record.copyWith(deletedAt: DateTime.now());
       _records.removeWhere((GameRecord item) => item.id == record.id);
+      _deletedRecords.removeWhere((GameRecord t) => t.id == tombstone.id);
+      _deletedRecords.add(tombstone);
     });
   }
 

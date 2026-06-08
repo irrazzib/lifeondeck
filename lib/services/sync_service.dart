@@ -124,10 +124,17 @@ class SyncService extends ChangeNotifier {
       status: SyncStatus.syncing,
     );
 
+    // Snapshot the dirty flag and clear it *before* sending so a mutation that
+    // lands mid-push re-sets it and is caught by the next cycle. Restored on a
+    // push failure (see catch) since the change never reached the server.
+    final bool wasDirty = _dirty;
+    bool didPush = false;
+
     try {
       // PUSH local changes if the state is dirty.
-      if (_dirty && onGetPayload != null) {
+      if (wasDirty && onGetPayload != null) {
         final AppSyncPayload payload = onGetPayload!();
+        _dirty = false;
 
         // App settings carry their own real updatedAt; only push them when they
         // were actually mutated after the last successful sync, so a fresh pull
@@ -173,7 +180,7 @@ class SyncService extends ChangeNotifier {
               'updatedAt': settingsUpdatedAt.toIso8601String(),
             },
         });
-        _dirty = false;
+        didPush = true;
       }
 
       // PULL remote changes since the last successful sync.
@@ -189,7 +196,12 @@ class SyncService extends ChangeNotifier {
         await onApplyPull!(pulled);
       }
 
-      _lastSyncedAt = DateTime.now().toUtc();
+      // Advance the cursor using the server's clock (the same clock the server
+      // filters rows by), not the local wall-clock. Falls back to local time
+      // only if the server omitted it.
+      _lastSyncedAt =
+          DateTime.tryParse((pulled['serverTime'] as String?) ?? '')?.toUtc() ??
+          DateTime.now().toUtc();
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString(
         _lastSyncKey,
@@ -203,6 +215,11 @@ class SyncService extends ChangeNotifier {
       );
       return true;
     } catch (e) {
+      // If the push never completed, the local changes are still unsent — keep
+      // the dirty flag so the next cycle retries them.
+      if (wasDirty && !didPush) {
+        _dirty = true;
+      }
       stateNotifier.value = stateNotifier.value.copyWith(
         status: SyncStatus.error,
         errorMessage: e.toString(),

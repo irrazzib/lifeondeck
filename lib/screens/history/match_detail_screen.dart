@@ -39,6 +39,9 @@ class TwoPlayerMatchDetailScreen extends StatefulWidget {
 class _TwoPlayerMatchDetailScreenState
     extends State<TwoPlayerMatchDetailScreen> {
   late List<GameRecord> _games;
+  // Tombstones for games deleted here; kept out of [_games] but returned on
+  // close so the deletion propagates to persistence and sync.
+  final List<GameRecord> _deletedGames = <GameRecord>[];
   late MatchMetadata _metadata;
   late List<SideboardDeck> _decks;
   final List<SideboardDeck> _createdDecks = <SideboardDeck>[];
@@ -84,7 +87,7 @@ class _TwoPlayerMatchDetailScreenState
         .toList(growable: false);
     Navigator.of(context).pop(
       MatchDetailResult(
-        games: updated,
+        games: <GameRecord>[...updated, ..._deletedGames],
         createdDecks: List<SideboardDeck>.unmodifiable(_createdDecks),
       ),
     );
@@ -315,9 +318,14 @@ class _TwoPlayerMatchDetailScreenState
       return;
     }
     setState(() {
+      // Soft-delete: drop from the visible list, keep a tombstone so the
+      // deletion syncs instead of resurrecting on the next pull.
+      final GameRecord tombstone = record.copyWith(deletedAt: DateTime.now());
       _games = _games
           .where((GameRecord game) => game.id != record.id)
           .toList(growable: false);
+      _deletedGames.removeWhere((GameRecord t) => t.id == tombstone.id);
+      _deletedGames.add(tombstone);
     });
   }
 

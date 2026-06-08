@@ -63,9 +63,13 @@ class _HomeScreenState extends State<HomeScreen> {
       _selectedGame != SupportedTcg.riftbound &&
       _selectedGame != SupportedTcg.lorcana;
 
+  // Live (non-tombstoned) records for the active game. Soft-deleted records are
+  // kept in [_gameRecords] so their tombstones persist and sync, but every
+  // display/stat/child-screen consumer works off this filtered view.
   List<GameRecord> _recordsForSelectedGame() {
     return _gameRecords
-        .where((GameRecord record) => record.tcgKey == _selectedTcgKey)
+        .where((GameRecord record) =>
+            record.tcgKey == _selectedTcgKey && record.deletedAt == null)
         .toList(growable: false);
   }
 
@@ -425,23 +429,27 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Merge the records a child screen returns back into the full collection.
+  // Union by id starting from every local record (all games + existing
+  // tombstones); returned records win. Child screens only ever receive the live
+  // records for one game, so a wholesale replace would silently drop this game's
+  // tombstones — the union preserves them while still applying updates, new
+  // records, and freshly-returned tombstones.
   List<GameRecord> _mergeRecordsForGame(
     List<GameRecord> updatedRecords,
     String tcgKey,
   ) {
-    final List<GameRecord> untouched = _gameRecords
-        .where((GameRecord record) => record.tcgKey != tcgKey)
-        .toList(growable: false);
-    final List<GameRecord> updatedScoped = updatedRecords
-        .map((GameRecord record) => record.copyWith(tcgKey: tcgKey))
-        .toList(growable: false);
-    final List<GameRecord> merged = <GameRecord>[
-      ...untouched,
-      ...updatedScoped,
-    ];
-    merged.sort((GameRecord a, GameRecord b) {
-      return b.createdAt.compareTo(a.createdAt);
-    });
+    final Map<String, GameRecord> byId = <String, GameRecord>{
+      for (final GameRecord record in _gameRecords) record.id: record,
+    };
+    for (final GameRecord record in updatedRecords) {
+      final GameRecord scoped = record.copyWith(tcgKey: tcgKey);
+      byId[scoped.id] = scoped;
+    }
+    final List<GameRecord> merged = byId.values.toList(growable: false)
+      ..sort((GameRecord a, GameRecord b) {
+        return b.createdAt.compareTo(a.createdAt);
+      });
     return merged;
   }
 
