@@ -1,9 +1,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY *.csproj ./
-RUN dotnet restore
+COPY ["LifeOnDeck.Api/LifeOnDeck.Api.csproj", "LifeOnDeck.Api/"]
+RUN dotnet restore "LifeOnDeck.Api/LifeOnDeck.Api.csproj"
 COPY . .
-RUN dotnet publish -c Release -o /app/publish
+RUN dotnet publish "LifeOnDeck.Api/LifeOnDeck.Api.csproj" -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
