@@ -46,9 +46,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _handleSignIn() async {
+    final AppStrings txt = context.txt;
     setState(() => _signingIn = true);
-    await widget.authService.signInWithGoogle();
-    if (mounted) setState(() => _signingIn = false);
+    try {
+      await widget.authService.signInWithGoogle();
+    } on AuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${txt.t('account.signInError')}\n${e.message}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _signingIn = false);
+    }
   }
 
   Future<void> _handleSignOut() async {

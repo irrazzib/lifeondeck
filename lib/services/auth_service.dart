@@ -7,6 +7,16 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/app_user.dart';
 import 'api_client.dart';
 
+/// Thrown by [AuthService.signInWithGoogle] when sign-in fails for a reason the
+/// user should be told about (e.g. the API server is unreachable). A plain
+/// user-cancelled popup does NOT raise this — it returns null instead.
+class AuthException implements Exception {
+  const AuthException(this.message);
+  final String message;
+  @override
+  String toString() => 'AuthException: $message';
+}
+
 class AuthService extends ChangeNotifier {
   AuthService(this._apiClient);
 
@@ -37,21 +47,41 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  /// Firebase error codes that mean the user aborted the popup/flow themselves.
+  /// These are silent (return null), not surfaced as an error.
+  static const Set<String> _cancelCodes = <String>{
+    'popup-closed-by-user',
+    'cancelled-popup-request',
+    'web-context-canceled',
+    'user-cancelled',
+  };
+
   Future<AppUser?> signInWithGoogle() async {
+    final UserCredential credential;
     try {
       final GoogleAuthProvider googleProvider = GoogleAuthProvider();
       googleProvider.addScope('email');
       googleProvider.addScope('profile');
 
-      final UserCredential credential = kIsWeb
+      credential = kIsWeb
           ? await _firebaseAuth.signInWithPopup(googleProvider)
           : await _firebaseAuth.signInWithProvider(googleProvider);
+    } on FirebaseAuthException catch (e) {
+      // User closed the popup / aborted: no error to show.
+      if (_cancelCodes.contains(e.code)) return null;
+      throw AuthException(e.message ?? e.code);
+    }
 
+    try {
       final User? firebaseUser = credential.user;
-      if (firebaseUser == null) return null;
+      if (firebaseUser == null) {
+        throw const AuthException('No Firebase user returned');
+      }
 
       final String? idToken = await firebaseUser.getIdToken();
-      if (idToken == null) return null;
+      if (idToken == null) {
+        throw const AuthException('Could not obtain Firebase ID token');
+      }
 
       final Map<String, dynamic> response = await _apiClient.post(
         '/auth/firebase',
@@ -70,8 +100,12 @@ class AuthService extends ChangeNotifier {
       _currentUser = user;
       notifyListeners();
       return user;
-    } catch (_) {
-      return null;
+    } on AuthException {
+      rethrow;
+    } catch (e) {
+      // Server unreachable, non-2xx, malformed response, etc. Firebase login
+      // succeeded but the app session could not be established.
+      throw AuthException(e.toString());
     }
   }
 

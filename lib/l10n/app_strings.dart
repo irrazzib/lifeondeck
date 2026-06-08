@@ -235,6 +235,7 @@ class AppStrings {
       'account.subtitleSignedOut': 'Sign in to sync your data',
       'account.subtitleSignedIn': '{displayName}',
       'account.signInGoogle': 'Sign in with Google',
+      'account.signInError': 'Sign-in failed. The server may be unreachable — please try again.',
       'account.signOut': 'Sign out',
       'account.clearLocalData': 'Clear local data',
       'account.clearLocalDataConfirm':
@@ -511,6 +512,7 @@ class AppStrings {
       'account.subtitleSignedOut': 'Accedi per sincronizzare i dati',
       'account.subtitleSignedIn': '{displayName}',
       'account.signInGoogle': 'Accedi con Google',
+      'account.signInError': 'Accesso non riuscito. Il server potrebbe non essere raggiungibile — riprova.',
       'account.signOut': 'Esci',
       'account.clearLocalData': 'Cancella dati locali',
       'account.clearLocalDataConfirm':
