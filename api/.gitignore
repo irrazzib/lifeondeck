@@ -82,6 +82,11 @@ secrets.json
 *.pfx
 *.key
 
+# Production env files (keep the *.example templates tracked)
+secrets/*.env
+*.env
+!*.env.example
+
 # Database files
 *.db
 *.db-shm
