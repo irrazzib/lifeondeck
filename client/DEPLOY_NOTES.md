@@ -5,7 +5,9 @@ Build pipeline: see `README.md` → "Build produzione (PWA)" (or `./build-web.sh
 
 ## Cache-Control headers (reverse proxy)
 
-Recommended `Cache-Control` per asset class:
+Recommended `Cache-Control` per asset class. The client image ships its own
+Nginx (`nginx.conf`) that already sets these; an upstream proxy must not
+override them.
 
 ```
 index.html              → Cache-Control: no-cache
@@ -39,4 +41,5 @@ fail with `auth/unauthorized-domain` until the domain is whitelisted:
 ## API CORS (reminder)
 
 The API restricts origins via `Cors:AllowedOrigins` (see
-`../lifeondeck-api/`). Add the production webapp origin there before going live.
+`../api/LifeOnDeck.Api/appsettings.json`). Add the production webapp origin there
+before going live — `https://lifeondeck.gmarra.it` is already listed.

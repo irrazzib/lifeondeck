@@ -3,7 +3,13 @@ module.exports = {
   globPatterns: [
     '**/*.{html,js,wasm,json,css,png,jpg,jpeg,svg,ico,otf,ttf,woff,woff2,bin}',
   ],
-  globIgnores: ['sw.js', 'sw.js.map', 'workbox-*.js', 'version.json'],
+  globIgnores: [
+    'sw.js',
+    'sw.js.map',
+    'workbox-*.js',
+    'version.json',
+    'flutter_service_worker.js',
+  ],
   swDest: '../build/web/sw.js',
   sourcemap: false,
   skipWaiting: true,

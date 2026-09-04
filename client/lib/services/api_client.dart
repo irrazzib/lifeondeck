@@ -7,7 +7,7 @@ class ApiClient {
       'API_BASE_URL',
       defaultValue: 'http://localhost:5000/api/v1',
     );
-    // In prod API_BASE_URL is a relative path (e.g. /lifeondeck/api/v1); resolving
+    // In prod API_BASE_URL is a relative path (e.g. /api/v1); resolving
     // it against Uri.base yields a same-origin absolute URL (no hardcoded domain,
     // no CORS). In dev the default is already absolute, so resolve leaves it intact.
     final String resolvedBaseUrl =

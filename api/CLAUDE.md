@@ -41,4 +41,6 @@ ASP.NET Core 10, EF Core + Npgsql (PostgreSQL), JWT bearer auth, .NET 10.
 | `Jwt:SecretKey` | env var or user secrets | Replace placeholder; min 32 chars |
 | `Firebase:ProjectId` | `appsettings.json` | Firebase project ID |
 
-CORS is fully open (`AllowAnyOrigin`) — restrict before deploying to production.
+CORS is a whitelist read from `Cors:AllowedOrigins` (`appsettings.json`, overridable
+per-environment). Empty list → every origin blocked. Entries support a `*` glob
+(e.g. `http://localhost:*`). Add a new deployment origin there before it goes live.

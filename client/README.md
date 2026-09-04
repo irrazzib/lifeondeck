@@ -32,11 +32,15 @@ Local dev (default localhost):
 flutter run -d chrome
 ```
 
-Production build pointing at a real API host:
+Production build. The webapp and the API share the host
+(`https://lifeondeck.gmarra.it`), so the base URL is root-relative and resolved
+against `Uri.base` at runtime — no hardcoded domain, no CORS:
 
 ```bash
-flutter build web --dart-define=API_BASE_URL=https://api.dominio.tld/api/v1
+flutter build web --base-href "/" --dart-define=API_BASE_URL=/api/v1
 ```
+
+For a build against a different API host, pass an absolute URL instead.
 
 ## Build produzione (PWA)
 
@@ -44,20 +48,32 @@ La build PWA è in due fasi: Flutter genera gli asset web, poi `workbox-cli`
 genera il service worker `sw.js`. **`--pwa-strategy=none`** disabilita il SW
 default di Flutter, altrimenti confligge con quello Workbox.
 
+Usa `build-web.sh`, che incapsula le due fasi ed è lo stesso comando usato
+dalla CI (`.github/workflows/deploy-client.yml`). I default sono già quelli di
+produzione — `API_BASE_URL=/api/v1`, `base-href=/`:
+
 ```bash
-cd lifeondeck
-flutter build web --release \
-  --pwa-strategy=none \
-  --dart-define=API_BASE_URL=https://api.dominio.tld/api/v1
-cd web-build-tools
-npx workbox-cli generateSW workbox-config.cjs
-# output finale: lifeondeck/build/web/
+cd client
+./build-web.sh
+# output finale: client/build/web/
 ```
 
-In alternativa lo script `build-web.sh` incapsula i due comandi:
+Override per staging o per un deploy sotto sotto-path:
 
 ```bash
-./build-web.sh https://api.dominio.tld/api/v1
+./build-web.sh https://api.staging.tld/api/v1 /sottopath/
+```
+
+Le due fasi equivalenti, se serve lanciarle a mano:
+
+```bash
+cd client
+flutter build web --release \
+  --pwa-strategy=none \
+  --base-href "/" \
+  --dart-define=API_BASE_URL=/api/v1
+cd web-build-tools
+npx workbox-cli generateSW workbox-config.cjs
 ```
 
 Prerequisito una tantum: `cd web-build-tools && npm install` (vedi

@@ -2,7 +2,7 @@
     "name": "LifeOnDeck — TCG Life Counter",
     "short_name": "LifeOnDeck",
     "description": "Track life points across Yu-Gi-Oh, MTG and more — with match history and sideboard plans.",
-    "start_url": ".",
+    "start_url": "/",
     "scope": "/",
     "display": "standalone",
     "orientation": "portrait",
